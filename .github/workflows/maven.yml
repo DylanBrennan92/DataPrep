@@ -2,7 +2,13 @@ name: Java CI with Maven
 
 on:
   push:
-    branches: ["main", "fix/*", "feat/*" ,"chore/*", "build/*, "docs/*"]
+    branches:
+      - main
+      - fix/*
+      - feat/*
+      - chore/*
+      - build/*
+      - docs/*
   pull_request:
     branches:
       - "main"
@@ -16,7 +22,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: '21'
-          distribution: 'termurin'
+          distribution: 'temurin'
           cache: maven
       - name: Build with Maven
         run: mvn -B package --file pom.xml
