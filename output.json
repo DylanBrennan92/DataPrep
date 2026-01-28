@@ -1,0 +1,161 @@
+[ {
+  "id" : "E001",
+  "name" : "Alice Thompson",
+  "department" : "Marketing",
+  "title" : "Director",
+  "hireDate" : "2018-05-12",
+  "salary" : "$115,000",
+  "status" : "Active"
+}, {
+  "id" : "E002",
+  "name" : "Bob Richards",
+  "department" : "IT",
+  "title" : "Systems Admin",
+  "hireDate" : "2020-11-01",
+  "salary" : "$88,000",
+  "status" : "Active"
+}, {
+  "id" : "E003",
+  "name" : "Charlie Davis",
+  "department" : "Finance",
+  "title" : "Senior Analyst",
+  "hireDate" : "2015-03-22",
+  "salary" : "$92,500",
+  "status" : "Active"
+}, {
+  "id" : "E004",
+  "name" : "Diana Prince",
+  "department" : "HR",
+  "title" : "HR Manager",
+  "hireDate" : "2019-07-15",
+  "salary" : "$95,000",
+  "status" : "Active"
+}, {
+  "id" : "E005",
+  "name" : "Edward Norton",
+  "department" : "Operations",
+  "title" : "Coordinator",
+  "hireDate" : "2021-01-10",
+  "salary" : "$62,000",
+  "status" : "Active"
+}, {
+  "id" : "E006",
+  "name" : "Fiona Gallagher",
+  "department" : "Marketing",
+  "title" : "Specialist",
+  "hireDate" : "2022-09-30",
+  "salary" : "$58,000",
+  "status" : "Active"
+}, {
+  "id" : "E007",
+  "name" : "George Miller",
+  "department" : "IT",
+  "title" : "Developer",
+  "hireDate" : "2017-06-18",
+  "salary" : "$105,000",
+  "status" : "Active"
+}, {
+  "id" : "E008",
+  "name" : "Hannah Abbott",
+  "department" : "Sales",
+  "title" : "Account Exec",
+  "hireDate" : "2020-02-14",
+  "salary" : "$75,000",
+  "status" : "Active"
+}, {
+  "id" : "E009",
+  "name" : "Ian Wright",
+  "department" : "Finance",
+  "title" : "Accountant",
+  "hireDate" : "2023-05-05",
+  "salary" : "$70,000",
+  "status" : "Active"
+}, {
+  "id" : "E010",
+  "name" : "Jane Foster",
+  "department" : "Operations",
+  "title" : "Manager",
+  "hireDate" : "2016-12-12",
+  "salary" : "$102,000",
+  "status" : "Active"
+}, {
+  "id" : "E011",
+  "name" : "Kevin Hart",
+  "department" : "Marketing",
+  "title" : "Social Media",
+  "hireDate" : "2021-08-20",
+  "salary" : "$52,000",
+  "status" : "On Leave"
+}, {
+  "id" : "E012",
+  "name" : "Laura Palmer",
+  "department" : "HR",
+  "title" : "Recruiter",
+  "hireDate" : "2022-03-11",
+  "salary" : "$65,000",
+  "status" : "Active"
+}, {
+  "id" : "E013",
+  "name" : "Michael Scott",
+  "department" : "Sales",
+  "title" : "Regional Manager",
+  "hireDate" : "2010-01-05",
+  "salary" : "$110,000",
+  "status" : "Active"
+}, {
+  "id" : "E014",
+  "name" : "Nina Simone",
+  "department" : "IT",
+  "title" : "Data Scientist",
+  "hireDate" : "2019-10-22",
+  "salary" : "$125,000",
+  "status" : "Active"
+}, {
+  "id" : "E015",
+  "name" : "Oscar Isaac",
+  "department" : "Finance",
+  "title" : "Junior Analyst",
+  "hireDate" : "2024-01-15",
+  "salary" : "$55,000",
+  "status" : "Active"
+}, {
+  "id" : "E016",
+  "name" : "Peter Parker",
+  "department" : "Marketing",
+  "title" : "Intern",
+  "hireDate" : "2025-06-01",
+  "salary" : "$40,000",
+  "status" : "Active"
+}, {
+  "id" : "E017",
+  "name" : "Quinn Fabray",
+  "department" : "Operations",
+  "title" : "Logistics",
+  "hireDate" : "2018-04-19",
+  "salary" : "$72,000",
+  "status" : "Active"
+}, {
+  "id" : "E018",
+  "name" : "Riley Reid",
+  "department" : "Sales",
+  "title" : "Lead Gen",
+  "hireDate" : "2022-11-30",
+  "salary" : "$50,000",
+  "status" : "Active"
+}, {
+  "id" : "E019",
+  "name" : "Steven Strange",
+  "department" : "IT",
+  "title" : "Security Specialist",
+  "hireDate" : "2020-09-08",
+  "salary" : "$118,000",
+  "status" : "Active"
+}, {
+  "id" : "E020",
+  "name" : "Tina Fey",
+  "department" : "HR",
+  "title" : "Benefits Admin",
+  "hireDate" : "2017-02-28",
+  "salary" : "$78,000",
+  "status" : "Active"
+} ]
