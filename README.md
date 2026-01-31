@@ -28,23 +28,39 @@ mvn clean package
 
 | Argument | Required | Description | Example |
 |----------|----------|-------------|---------|
-| `inputFile.xls` | Yes | Path to the Excel (.xls) file to process | `staff.xls`, `data/employees.xls` |
-| `outputFile.json` | Yes | Path where the JSON output should be saved | `output.json`, `results/employees.json` |
+| `recordType` | Yes | Record type to extract: `EMPLOYEE` or `VEHICLE` | `VEHICLE`, `EMPLOYEE` |
+| `inputFile.xls` | Yes | Path to the Excel (.xls) file to process | `nissan.xls`, `staff.xls` |
+| `outputFile.json` | Yes | Path where the JSON output should be saved | `output-nissan.json`, `employees.json` |
+| `requiredCells` | Yes | Minimum number of filled cells for a row to be kept | `20`, `7` |
+| `columnThreshold` | No | Minimum fill ratio (0.0–1.0) to keep a column; default `0.1` (10%) | `0.01`, `0.05` |
+
+**Usage:**  
+`java -jar spec-extractor.jar <recordType> <inputFile.xls> <outputFile.json> <requiredCells> [columnThreshold]`
 
 ## Example usage
 
-```
-java -jar target/spec-extractor-1.0-SNAPSHOT-jar-with-dependencies.jar src/main/resources/staff.xls output.json
+```bash
+# Vehicle specs (e.g. Nissan spreadsheet) — 20 required cells, 1% column threshold
+java -jar target/spec-extractor-1.0-SNAPSHOT-jar-with-dependencies.jar VEHICLE src/main/resources/nissan.xls output-nissan.json 20 0.01
+
+# Employee data — 7 required cells, default 10% column threshold
+java -jar target/spec-extractor-1.0-SNAPSHOT-jar-with-dependencies.jar EMPLOYEE src/main/resources/staff.xls output.json 7
+
+# With DEBUG logging
+java -DLOG_LEVEL=DEBUG -jar target/spec-extractor-1.0-SNAPSHOT-jar-with-dependencies.jar VEHICLE src/main/resources/nissan.xls output-nissan.json 20 0.01
 ```
 
-## Logging Options
-```
-# INFO level (default - shows progress and results)
-java -jar target/spec-extractor-*.jar input.xls output.json
+## Logging options
 
-# DEBUG level (detailed processing information)
-java -DLOG_LEVEL=DEBUG -jar target/spec-extractor-*.jar input.xls output.json
+Set the `LOG_LEVEL` system property to control verbosity:
 
-# TRACE level (maximum verbosity for troubleshooting)
-java -DLOG_LEVEL=TRACE -jar target/spec-extractor-*.jar input.xls output.json
+```bash
+# INFO (default — progress and results)
+java -jar target/spec-extractor-*.jar VEHICLE input.xls output.json 20
+
+# DEBUG (detailed processing)
+java -DLOG_LEVEL=DEBUG -jar target/spec-extractor-*.jar VEHICLE input.xls output.json 20 0.01
+
+# TRACE (maximum verbosity for troubleshooting)
+java -DLOG_LEVEL=TRACE -jar target/spec-extractor-*.jar VEHICLE input.xls output.json 20 0.01
 ```
