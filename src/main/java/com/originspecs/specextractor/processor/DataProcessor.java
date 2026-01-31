@@ -1,5 +1,8 @@
 package com.originspecs.specextractor.processor;
-import com.originspecs.specextractor.model.Employee;
+
+import com.originspecs.specextractor.model.DataRecord;
+import com.originspecs.specextractor.model.Vehicle;
+import com.originspecs.specextractor.reader.FileReader;
 import com.originspecs.specextractor.writer.JsonFileWriter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.DataFormatter;
@@ -10,27 +13,22 @@ import java.nio.file.Path;
 import java.util.List;
 
 @Slf4j
-public class DataProcessor {
+public class DataProcessor<T extends DataRecord> {
 
-    private final RowParser rowParser;
-    private final JsonFileWriter jsonWriter;
+    private final RowParser<T> rowParser;
+    private final JsonFileWriter<T> jsonWriter;
 
-    public DataProcessor(){
-        this.rowParser = new RowParser();
-        this.jsonWriter = new JsonFileWriter();
-    }
-
-    public DataProcessor(RowParser rowParser, JsonFileWriter jsonWriter){
+    public DataProcessor(RowParser<T> rowParser, JsonFileWriter<T> jsonWriter) {
         this.rowParser = rowParser;
         this.jsonWriter = jsonWriter;
     }
 
-    public Employee createEmployeeFromRow(Row row, DataFormatter formatter){
+    public T createRecordFromRow(Row row, DataFormatter formatter) {
         return rowParser.parse(row, formatter).orElse(null);
     }
 
-    public void convertAndWriteToFile(List<Employee> employees, String outputPath) throws IOException{
-        jsonWriter.write(employees, Path.of(outputPath));
+    public void convertAndWriteToFile(List<T> records, String outputPath) throws IOException {
+        jsonWriter.write(records, Path.of(outputPath));
     }
 
 }

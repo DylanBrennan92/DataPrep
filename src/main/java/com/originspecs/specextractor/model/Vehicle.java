@@ -20,6 +20,5 @@ public record Vehicle(
         String other,
         String gasCertLevel,
         String fy15StandardAchievement,
-        String fy20StandardAchievement) {
-
-}
+        String fy20StandardAchievement)
+        implements DataRecord{ }

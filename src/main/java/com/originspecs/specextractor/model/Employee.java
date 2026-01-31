@@ -9,4 +9,4 @@ public record Employee(
         String salary,
         String status
 
-) { }
+) implements DataRecord { }

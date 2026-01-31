@@ -12,13 +12,13 @@ import java.nio.file.Path;
 import java.util.List;
 
 @Slf4j
-public class JsonFileWriter {
+public class JsonFileWriter <T> {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
             .enable(SerializationFeature.INDENT_OUTPUT);
 
-    public void write(List<Employee> employees, Path outputPath) throws IOException {
-        log.debug("Writing {} employees to JSON file", employees.size());
+    public void write(List<T> records, Path outputPath) throws IOException {
+        log.debug("Writing {} employees to JSON file", records.size());
         log.debug("Output path: {}", outputPath.toAbsolutePath());
 
         // Check if output directory exists and is writable
@@ -31,20 +31,20 @@ public class JsonFileWriter {
         }
 
         try {
-            var json = serializeToJson(employees);
+            var json = serializeToJson(records);
             Files.writeString(outputPath, json);
             log.info("Successfully wrote JSON file: {}", outputPath.toAbsolutePath());
 
         } catch (JsonProcessingException e) {
             log.error("JSON serialization failed", e);
-            throw new IOException("Failed to serialize employees to JSON", e);
+            throw new IOException("Failed to serialize records to JSON", e);
         } catch (IOException e) {
             log.error("File write failed for path: {}", outputPath.toAbsolutePath(), e);
             throw e;
         }
     }
 
-    public String serializeToJson(List<Employee> employees) throws JsonProcessingException {
-        return OBJECT_MAPPER.writeValueAsString(employees);
+    public String serializeToJson(List<T> records) throws JsonProcessingException {
+        return OBJECT_MAPPER.writeValueAsString(records);
     }
 }
