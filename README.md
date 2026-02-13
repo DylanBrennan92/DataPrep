@@ -45,10 +45,11 @@ mvn clean package
 
 ```bash
 # Vehicle specs (e.g. Nissan spreadsheet) — 20 required cells, 1% column threshold
-java -jar target/DataPrep-1.0-SNAPSHOT-jar-with-dependencies.jar src/main/resources/nissan.xls output-nissan.json 0.01
+
+java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar src/main/resources/nissan.xls output-nissan.json 0.01
 
 # With DEBUG logging
-java -DLOG_LEVEL=DEBUG -jar target/DataPrep src/main/resources/nissan.xls output-nissan.json 0.01
+java -DLOG_LEVEL=DEBUG -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar src/main/resources/nissan.xls output-nissan.json 0.01
 ```
 
 ## Logging options
