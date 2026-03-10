@@ -282,16 +282,16 @@ class WorkBookProcessorTest {
         }
 
         @Test
-        void fillDown_doesNotExtendPastLastDataRow() {
-            // The last row has only 1 non-empty cell — it is a footnote row and must not
-            // receive fill-down values even though its Car Name and Common Name cells are empty.
+        void fillDown_doesNotExtendPastLastDataRow_andTrailingFootnoteIsRemoved() {
+            // The last row has only 1 non-empty cell — it is a footnote row. Fill-down must not
+            // extend to it, and removeTrailingData must remove it from the output.
             WorkSheetData sheet = buildSheet(
                     rawHeaders("車名", "通称名", "型式", "エンジン", "重量", "排気量"),
                     dataRow("スズキ", "スイフト", "ZC33S", "K14C", "940kg",  "1.4L"),
                     dataRow("",       "スイフト", "ZC33S", "K14C", "940kg",  "1.4L"),
                     dataRow("",       "ジムニー", "JB64W", "R06A", "1070kg", "0.66L"),
                     dataRow("",       "",         "JB64W", "R06A", "1100kg", "0.66L"),
-                    footnoteRow("(注）スズキ株式会社")  // 1 non-empty cell → footnote
+                    footnoteRow("(注）スズキ株式会社")  // 1 non-empty cell → footnote, removed by trailing-data step
             );
 
             WorkBookData result = processor.process(workBook(sheet), 0.01);
@@ -301,10 +301,67 @@ class WorkBookProcessorTest {
             int carNameIdx  = headers.indexOf("Car Name");
             int commonIdx   = headers.indexOf("Common Name");
 
-            // Last row is the footnote — it must have empty Car Name and Common Name
-            RowData footnote = rows.get(rows.size() - 1);
-            assertThat(footnote.getCell(carNameIdx)).isEmpty();
-            assertThat(footnote.getCell(commonIdx)).isEmpty();
+            // Footnote row is removed — output has only the 4 data rows
+            assertThat(rows).hasSize(4);
+            RowData lastRow = rows.get(rows.size() - 1);
+            assertThat(lastRow.getCell(carNameIdx)).isEqualTo("スズキ");
+            assertThat(lastRow.getCell(commonIdx)).isEqualTo("ジムニー");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Trailing data removal
+    // -----------------------------------------------------------------------
+
+    @Nested
+    class TrailingDataRemoval {
+
+        @Test
+        void footnoteRowAfterData_isRemoved() {
+            // Real data rows (≥4 cells) followed by a footnote (注) row with only 1 non-empty cell
+            WorkSheetData sheet = buildSheet(
+                    rawHeaders("車名", "通称名", "型式", "エンジン", "重量", "排気量"),
+                    dataRow("レクサス", "RX450h", "2GR", "3.456", "19.4", "120"),
+                    dataRow("", "RX270", "1AR", "2.671", "10.4", "223"),
+                    footnoteRow("(注) JC08モード燃費値を有する車両については、10・15モード燃費値に下線を引いています。")
+            );
+
+            WorkBookData result = processor.process(workBook(sheet), 0.01);
+            List<RowData> rows = result.getWorksheets().get(0).getRows();
+
+            assertThat(rows).hasSize(2);
+            assertThat(rows.get(0).getCell(1)).isEqualTo("RX450h");
+            assertThat(rows.get(1).getCell(1)).isEqualTo("RX270");
+        }
+
+        @Test
+        void blankRowsAfterData_areRemoved() {
+            WorkSheetData sheet = buildSheet(
+                    rawHeaders("車名", "通称名", "型式", "エンジン", "重量", "排気量"),
+                    dataRow("トヨタ", "カローラ", "ZRE212", "2ZR", "1290kg", "1.8L"),
+                    dataRow("", "", "", "", "", ""),
+                    dataRow("", "", "", "", "", "")
+            );
+
+            WorkBookData result = processor.process(workBook(sheet), 0.01);
+            List<RowData> rows = result.getWorksheets().get(0).getRows();
+
+            assertThat(rows).hasSize(1);
+            assertThat(rows.get(0).getCell(1)).isEqualTo("カローラ");
+        }
+
+        @Test
+        void noTrailingData_rowsUnchanged() {
+            WorkSheetData sheet = buildSheet(
+                    rawHeaders("車名", "通称名", "型式", "エンジン", "重量", "排気量"),
+                    dataRow("ホンダ", "フィット", "GK3", "L13B", "1080kg", "1.3L"),
+                    dataRow("", "フィット", "GK6", "L15B", "1120kg", "1.5L")
+            );
+
+            WorkBookData result = processor.process(workBook(sheet), 0.01);
+            List<RowData> rows = result.getWorksheets().get(0).getRows();
+
+            assertThat(rows).hasSize(2);
         }
     }
 

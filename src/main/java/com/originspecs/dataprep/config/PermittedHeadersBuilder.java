@@ -51,7 +51,7 @@ public class PermittedHeadersBuilder {
             return permittedHeaders;
 
         } catch (IOException e) {
-            log.warn("Could not read permitted headers file '{}': {} — header matching will be skipped", fileName, e.getMessage());
+            log.error("Could not read permitted headers file '{}': {} — header matching will be skipped", fileName, e.getMessage());
             return Map.of();
         }
     }
