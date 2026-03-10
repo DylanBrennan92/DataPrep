@@ -93,6 +93,13 @@ public class WorkBookReader {
 
         validateDataStartRow(sheet, headerRange);
 
+        // Exclude metadata columns to the left of the Car Name column (e.g. Lexus sheets)
+        int dataStartCol = Math.max(0, headerRange.carNameColumnIndex());
+        if (dataStartCol > 0) {
+            log.info("Sheet '{}': excluding {} metadata column(s) before Car Name (col {})",
+                    sheet.getSheetName(), dataStartCol, headerRange.carNameColumnIndex());
+        }
+
         // Build merged cell map once for the whole sheet so header rows resolve correctly
         Map<String, String> mergedCellValues = buildMergedCellValueMap(sheet);
 
@@ -110,13 +117,15 @@ public class WorkBookReader {
 
             if (headerRange.isHeaderRow(rowIndex)) {
                 // Collect every header range row — merged cell values are expanded here
-                List<String> headerRow = readHeaderRow(row, mergedCellValues);
+                List<String> fullHeaderRow = readHeaderRow(row, mergedCellValues);
+                List<String> headerRow = sliceFromColumn(fullHeaderRow, dataStartCol);
                 rawHeaderRows.add(headerRow);
                 maxColumnCount = Math.max(maxColumnCount, headerRow.size());
                 continue;
             }
 
-            rows.add(new RowData(readRow(row, evaluator, mergedCellValues)));
+            List<String> fullRow = readRow(row, evaluator, mergedCellValues);
+            rows.add(new RowData(sliceFromColumn(fullRow, dataStartCol)));
         }
 
         worksheetData.setRawHeaderRows(rawHeaderRows);
@@ -189,7 +198,16 @@ public class WorkBookReader {
     }
 
     /**
-     * Checks if the first data row starts with a known Japanese car brand name.
+     * Returns a sublist from the given column index onward. Used to exclude metadata
+     * columns to the left of the Car Name column.
+     */
+    private static List<String> sliceFromColumn(List<String> values, int fromIndex) {
+        if (fromIndex <= 0 || fromIndex >= values.size()) return values;
+        return new ArrayList<>(values.subList(fromIndex, values.size()));
+    }
+
+    /**
+     * Checks if the first data row has a known Japanese car brand name in the Car Name column.
      * Logs a warning if no brand match is found, which may indicate that header
      * detection did not land on the correct row.
      */
@@ -203,15 +221,16 @@ public class WorkBookReader {
             return;
         }
 
-        Cell firstCell = firstDataRow.getCell(0, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
-        String firstValue = firstCell == null ? "" : formatter.formatCellValue(firstCell).strip();
+        int carNameColIndex = headerRange.carNameColumnIndex();
+        Cell carNameCell = firstDataRow.getCell(carNameColIndex, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
+        String cellValue = carNameCell == null ? "" : formatter.formatCellValue(carNameCell).strip();
 
-        if (japaneseBrandNames.contains(firstValue)) {
-            log.debug("Sheet '{}': data start confirmed — first row starts with brand '{}'",
-                    sheet.getSheetName(), firstValue);
+        if (japaneseBrandNames.contains(cellValue)) {
+            log.debug("Sheet '{}': data start confirmed — first row has brand '{}' in Car Name column (col {})",
+                    sheet.getSheetName(), cellValue, carNameColIndex);
         } else {
-            log.warn("Sheet '{}': first data row at index {} starts with '{}' which is not a known brand — " +
-                    "header detection may be incorrect", sheet.getSheetName(), dataStartRow, firstValue);
+            log.warn("Sheet '{}': first data row at index {} has '{}' in Car Name column (col {}) — not a known brand; " +
+                    "header detection may be incorrect", sheet.getSheetName(), dataStartRow, cellValue, carNameColIndex);
         }
     }
 

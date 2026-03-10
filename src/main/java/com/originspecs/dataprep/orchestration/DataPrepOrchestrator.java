@@ -41,7 +41,7 @@ public class DataPrepOrchestrator {
                 .collect(Collectors.toSet());
 
         this.reader = new WorkBookReader(japaneseBrandNames);
-        this.processor = new WorkBookProcessor(permittedHeaders);
+        this.processor = new WorkBookProcessor(permittedHeaders, japaneseBrandNames);
         this.writer = new WorkBookWriter();
     }
 
