@@ -3,7 +3,13 @@ package com.originspecs.dataprep.reader;
 import com.originspecs.dataprep.config.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -17,10 +23,11 @@ import java.util.Set;
  *   <li>Walk backwards from that row to find the header block start: the first row
  *       with fewer than {@value MIN_HEADER_CELLS} non-empty cells is treated as
  *       pre-header metadata; the block starts at the next row.</li>
- *   <li>From the "車名" row, scan <em>forward</em> until column A contains a known
- *       Japanese brand name — that row is the data start; the header range ends at
- *       the row immediately before it. This correctly captures sub-header rows that
- *       sit below the "車名" row.</li>
+ *   <li>From the "車名" row, scan <em>forward</em> until the Car Name column (the
+ *       column containing "車名") contains a known Japanese brand name — that row is
+ *       the data start; the header range ends at the row immediately before it. This
+ *       correctly captures sub-header rows and works when the Car Name column is not
+ *       column A (e.g. Lexus sheets with metadata in leading columns).</li>
  * </ol>
  *
  * <p>If no brand names are provided, the "車名" row is used as the header range end
@@ -65,12 +72,14 @@ public class HeaderRangeDetector {
         }
 
         int startRowIndex = findHeaderRangeStart(sheet, carNameRowIndex);
-        int endRowIndex = findHeaderRangeEnd(sheet, carNameRowIndex);
+        var endAndCol = findHeaderRangeEndAndCarNameColumn(sheet, carNameRowIndex);
+        int endRowIndex = endAndCol.endRowIndex();
+        int carNameColIndex = endAndCol.carNameColumnIndex();
 
-        HeaderRange range = new HeaderRange(startRowIndex, endRowIndex);
+        HeaderRange range = new HeaderRange(startRowIndex, endRowIndex, carNameColIndex);
 
-        log.info("Sheet '{}': detected header range rows {}-{}, data starts at row {}",
-                sheet.getSheetName(), startRowIndex, endRowIndex, range.dataStartRowIndex());
+        log.info("Sheet '{}': detected header range rows {}-{}, data starts at row {}, Car Name col {}",
+                sheet.getSheetName(), startRowIndex, endRowIndex, range.dataStartRowIndex(), carNameColIndex);
 
         return Optional.of(range);
     }
@@ -108,21 +117,83 @@ public class HeaderRangeDetector {
     }
 
     /**
+     * Returns all column indices where "車名" appears in the given row.
+     * Uses merged-cell expansion so that columns covered by a merge (which only
+     * store the value in the origin cell) are included. This allows scanning for
+     * brands in the correct column when metadata columns (e.g. Lexus) share a
+     * merged header with the actual data column.
+     */
+    private List<Integer> findColumnsWithCarName(Sheet sheet, int carNameRowIndex) {
+        Set<Integer> colSet = new LinkedHashSet<>();
+        Map<String, String> mergedValues = buildMergedCellValueMap(sheet);
+        Row row = sheet.getRow(carNameRowIndex);
+        if (row == null) return List.of();
+
+        int lastCol = row.getLastCellNum();
+        for (int c = 0; c < lastCol; c++) {
+            String value = getCellValueWithMerge(sheet, row, c, mergedValues);
+            if (Constants.CAR_NAME_JP.equals(value)) {
+                colSet.add(c);
+            }
+        }
+        return new ArrayList<>(colSet);
+    }
+
+    private String getCellValueWithMerge(Sheet sheet, Row row, int colIndex, Map<String, String> mergedValues) {
+        String key = row.getRowNum() + ":" + colIndex;
+        if (mergedValues.containsKey(key)) {
+            return mergedValues.get(key);
+        }
+        Cell cell = row.getCell(colIndex, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
+        return cell == null ? "" : formatter.formatCellValue(cell).strip();
+    }
+
+    private Map<String, String> buildMergedCellValueMap(Sheet sheet) {
+        Map<String, String> mergedValues = new HashMap<>();
+        for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
+            CellRangeAddress region = sheet.getMergedRegion(i);
+            Row firstRow = sheet.getRow(region.getFirstRow());
+            if (firstRow == null) continue;
+
+            Cell originCell = firstRow.getCell(region.getFirstColumn(), Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
+            String value = originCell == null ? "" : formatter.formatCellValue(originCell).strip();
+            if (value.isEmpty()) continue;
+
+            for (int r = region.getFirstRow(); r <= region.getLastRow(); r++) {
+                for (int c = region.getFirstColumn(); c <= region.getLastColumn(); c++) {
+                    if (r == region.getFirstRow() && c == region.getFirstColumn()) continue;
+                    mergedValues.put(r + ":" + c, value);
+                }
+            }
+        }
+        return mergedValues;
+    }
+
+    private record EndAndColumn(int endRowIndex, int carNameColumnIndex) {}
+
+    /**
      * Scans forward from the "車名" row to find where real car data begins.
-     * The header range ends at the row immediately before the first row whose
-     * column A value matches a known Japanese brand name.
-     *
-     * <p>Falls back to {@code carNameRowIndex} if no brand names are configured
-     * or no brand row is found within a reasonable look-ahead window.
+     * Checks every column that contains 車名 — when metadata columns (e.g. Lexus
+     * sheets) inherit 車名 from merged headers, the actual brand data is in a
+     * different column. The first column that has a brand name identifies both
+     * the data start row and the true Car Name column.
      *
      * @param sheet           The POI sheet to scan
      * @param carNameRowIndex The row containing "車名"
-     * @return 0-based index of the last header row
+     * @return EndAndColumn with last header row index and the Car Name column index
      */
-    private int findHeaderRangeEnd(Sheet sheet, int carNameRowIndex) {
+    private EndAndColumn findHeaderRangeEndAndCarNameColumn(Sheet sheet, int carNameRowIndex) {
+        List<Integer> colsWithCarName = findColumnsWithCarName(sheet, carNameRowIndex);
+        if (colsWithCarName.isEmpty()) {
+            log.warn("Sheet '{}': no column with '{}' in row {} — using row as header end, col 0",
+                    sheet.getSheetName(), Constants.CAR_NAME_JP, carNameRowIndex);
+            return new EndAndColumn(carNameRowIndex, 0);
+        }
+
         if (japaneseBrandNames.isEmpty()) {
             log.debug("No brand names configured — using '車名' row {} as header range end", carNameRowIndex);
-            return carNameRowIndex;
+            int firstCol = colsWithCarName.get(0);
+            return new EndAndColumn(carNameRowIndex, firstCol);
         }
 
         int lastRow = sheet.getLastRowNum();
@@ -130,20 +201,23 @@ public class HeaderRangeDetector {
             Row row = sheet.getRow(i);
             if (row == null) continue;
 
-            Cell firstCell = row.getCell(0, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
-            if (firstCell == null) continue;
+            for (int colIndex : colsWithCarName) {
+                Cell cell = row.getCell(colIndex, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
+                if (cell == null) continue;
 
-            String colAValue = formatter.formatCellValue(firstCell).strip();
-            if (japaneseBrandNames.contains(colAValue)) {
-                log.debug("Sheet '{}': found brand '{}' at row {} — header range ends at row {}",
-                        sheet.getSheetName(), colAValue, i, i - 1);
-                return i - 1;
+                String cellValue = formatter.formatCellValue(cell).strip();
+                if (japaneseBrandNames.contains(cellValue)) {
+                    log.debug("Sheet '{}': found brand '{}' at row {} (col {}) — header range ends at row {}, Car Name col {}",
+                            sheet.getSheetName(), cellValue, i, colIndex, i - 1, colIndex);
+                    return new EndAndColumn(i - 1, colIndex);
+                }
             }
         }
 
-        log.warn("Sheet '{}': no brand name found after '車名' row {} — falling back to '車名' row as header range end",
-                sheet.getSheetName(), carNameRowIndex);
-        return carNameRowIndex;
+        int fallbackCol = colsWithCarName.get(0);
+        log.warn("Sheet '{}': no brand name found after '車名' row {} (checked cols {}) — falling back to row {} as header end, col {}",
+                sheet.getSheetName(), carNameRowIndex, colsWithCarName, carNameRowIndex, fallbackCol);
+        return new EndAndColumn(carNameRowIndex, fallbackCol);
     }
 
     private int countNonEmptyCells(Row row) {

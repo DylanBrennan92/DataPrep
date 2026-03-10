@@ -17,13 +17,26 @@ import java.util.Set;
 public class WorkBookProcessor {
 
     private final HeaderResolver headerResolver;
+    private final Set<String> japaneseBrandNames;
 
     /**
-     * Creates a processor with the given permitted headers map.
+     * Creates a processor with the given permitted headers map (no brand names for dedup).
      * Use {@link com.originspecs.dataprep.config.PermittedHeadersBuilder} to load the map.
      */
     public WorkBookProcessor(Map<String, String> permittedHeaders) {
+        this(permittedHeaders, Set.of());
+    }
+
+    /**
+     * Creates a processor with the given permitted headers map and brand names for
+     * Car Name column deduplication (drops metadata columns that repeat "車名").
+     *
+     * @param permittedHeaders Map of Japanese → English header mappings
+     * @param japaneseBrandNames Set of known brand names (e.g. レクサス) for Car Name column deduplication
+     */
+    public WorkBookProcessor(Map<String, String> permittedHeaders, Set<String> japaneseBrandNames) {
         this.headerResolver = new HeaderResolver(permittedHeaders);
+        this.japaneseBrandNames = japaneseBrandNames != null ? japaneseBrandNames : Set.of();
     }
 
     /**
@@ -31,6 +44,7 @@ public class WorkBookProcessor {
      */
     public WorkBookProcessor(HeaderResolver headerResolver) {
         this.headerResolver = headerResolver;
+        this.japaneseBrandNames = Set.of();
     }
 
     /**
@@ -155,17 +169,44 @@ public class WorkBookProcessor {
             byLabel.computeIfAbsent(headers.get(i), k -> new ArrayList<>()).add(i);
         }
 
-        // Decide which positions to drop based on fill rate
+        // Decide which positions to drop based on fill rate and Car Name heuristics
         Set<Integer> toDrop = new HashSet<>();
         for (Map.Entry<String, List<Integer>> entry : byLabel.entrySet()) {
             List<Integer> positions = entry.getValue();
             if (positions.size() <= 1) continue;
+
+            // For Car Name columns: drop the one where data is mostly the label "車名" (metadata column)
+            if (Constants.CAR_NAME_EN.equals(entry.getKey()) && !japaneseBrandNames.isEmpty()) {
+                for (int pos : positions) {
+                    if (isLabelColumn(rows, colIndices.get(pos), Constants.CAR_NAME_JP)) {
+                        toDrop.add(pos);
+                        log.info("Sheet '{}': dropping duplicate column {} ('{}') — data is label '車名', not brand names",
+                                sheetName, colIndices.get(pos), entry.getKey());
+                    }
+                }
+                positions = positions.stream().filter(p -> !toDrop.contains(p)).toList();
+                if (positions.size() <= 1) continue;
+            }
+
+            // For Common Name columns: drop the one where data is mostly the label "通称名" (metadata column)
+            if (Constants.COMMON_NAME_EN.equals(entry.getKey())) {
+                for (int pos : positions) {
+                    if (isLabelColumn(rows, colIndices.get(pos), Constants.COMMON_NAME_JP)) {
+                        toDrop.add(pos);
+                        log.info("Sheet '{}': dropping duplicate column {} ('{}') — data is label '通称名', not model names",
+                                sheetName, colIndices.get(pos), entry.getKey());
+                    }
+                }
+                positions = positions.stream().filter(p -> !toDrop.contains(p)).toList();
+                if (positions.size() <= 1) continue;
+            }
 
             double maxFill = positions.stream()
                     .mapToDouble(i -> fillRate(rows, colIndices.get(i), totalRows))
                     .max().orElse(0);
 
             for (int pos : positions) {
+                if (toDrop.contains(pos)) continue;
                 double fill = fillRate(rows, colIndices.get(pos), totalRows);
                 if (maxFill > 0 && fill < maxFill * DEDUP_FILL_RATIO_THRESHOLD) {
                     toDrop.add(pos);
@@ -214,6 +255,29 @@ public class WorkBookProcessor {
      *
      * <p>Falls back to the overall fill rate if no data rows are found.
      */
+    /**
+     * Returns true if this column appears to be a metadata/label column (repeating the
+     * given label) rather than actual data. Used to drop duplicate Car Name / Common
+     * Name columns in sheets like Lexus where merged headers create false duplicates.
+     */
+    private boolean isLabelColumn(List<RowData> rows, int colIndex, String label) {
+        List<RowData> dataRows = rows.stream()
+                .filter(row -> nonEmptyCellCount(row) >= DATA_ROW_MIN_CELLS)
+                .toList();
+        if (dataRows.isEmpty()) return false;
+
+        long nonEmpty = 0;
+        long labelCount = 0;
+        for (RowData row : dataRows) {
+            String val = row.getCell(colIndex).trim();
+            if (val.isEmpty()) continue;
+            nonEmpty++;
+            if (label.equals(val)) labelCount++;
+        }
+        if (nonEmpty < 2) return false;
+        return (double) labelCount / nonEmpty >= 0.5;
+    }
+
     private double fillRate(List<RowData> rows, int colIndex, int totalRows) {
         if (totalRows == 0) return 0;
 
