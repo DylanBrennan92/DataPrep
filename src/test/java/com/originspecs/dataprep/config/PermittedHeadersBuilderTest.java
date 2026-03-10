@@ -74,8 +74,21 @@ class PermittedHeadersBuilderTest {
     }
 
     @Test
+    void load_fromTestResources_loadsFile() {
+        Path testResource = Path.of("src/test/resources/local-data/permittedHeaders.csv");
+        Map<String, String> result = PermittedHeadersBuilder.load(testResource.toString());
+
+        assertThat(result)
+                .containsEntry("車名", "Car Name")
+                .containsEntry("通称名", "Common Name")
+                .containsEntry("型式", "Model Type")
+                .hasSize(3);
+    }
+
+    @Test
     void load_missingFile_returnsEmptyMapWithoutThrowing() {
-        Map<String, String> result = PermittedHeadersBuilder.load("nonexistent/path/headers.csv");
+        Path nonExistent = tempDir.resolve("missing").resolve("headers.csv");
+        Map<String, String> result = PermittedHeadersBuilder.load(nonExistent.toString());
 
         assertThat(result).isEmpty();
     }

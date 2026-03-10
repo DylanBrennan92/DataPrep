@@ -95,13 +95,17 @@ public class WorkBookProcessor {
         List<RowData> filteredRows = filterRows(sheet.getRows(), finalColumns);
         List<RowData> filledRows = fillDownGroupColumns(finalHeaders, filteredRows, sheet.getName());
 
+        // Step 7: remove trailing data — footnote rows, notes (e.g. 注), and blank rows
+        //         that appear after the last real data row.
+        List<RowData> trimmedRows = removeTrailingData(filledRows, sheet.getName());
+
         WorkSheetData processed = new WorkSheetData();
         processed.setName(sheet.getName());
         processed.setIndex(sheet.getIndex());
         processed.setOriginalRowCount(sheet.getOriginalRowCount());
         processed.setOriginalColumnCount(sheet.getOriginalColumnCount());
         processed.setHeaders(finalHeaders);
-        processed.setRows(filledRows);
+        processed.setRows(trimmedRows);
 
         log.info("Sheet '{}': {} columns → headers: {}",
                 sheet.getName(), finalHeaders.size(), finalHeaders);
@@ -293,6 +297,26 @@ public class WorkBookProcessor {
         log.debug("Sheet '{}': fill-down applied to Car Name (col {}) and Common Name (col {}) through row {}",
                 sheetName, carNameIdx, commonNameIdx, lastDataRow);
         return result;
+    }
+
+    /**
+     * Removes trailing data rows — footnote text (e.g. 注), notes, and blank rows
+     * that appear after the last real data row. Real data rows have at least
+     * {@value DATA_ROW_MIN_CELLS} non-empty cells.
+     *
+     * @param rows      Data rows (after fill-down)
+     * @param sheetName Used in log messages
+     * @return Rows truncated to exclude trailing content
+     */
+    private List<RowData> removeTrailingData(List<RowData> rows, String sheetName) {
+        int lastDataRow = findLastDataRowIndex(rows);
+        if (lastDataRow >= rows.size() - 1) {
+            return rows;
+        }
+        int removed = rows.size() - 1 - lastDataRow;
+        log.info("Sheet '{}': removing {} trailing row(s) (footnotes/notes/blank after last data row)",
+                sheetName, removed);
+        return new ArrayList<>(rows.subList(0, lastDataRow + 1));
     }
 
     /**
