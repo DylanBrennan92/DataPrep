@@ -81,8 +81,17 @@ public class WorkBookProcessor {
         // Step 2: determine which columns have enough data to keep
         List<Integer> columnsToKeep = determineColumnsToKeep(sheet, threshold, carNameColIndex);
 
+        // Step 2b: drop column B (index 1) if it contains any ※ footnote marker
+        if (columnsToKeep.contains(1) && columnContainsFootnoteMarker(sheet.getRows(), 1)) {
+            columnsToKeep.remove(Integer.valueOf(1));
+            log.info("Sheet '{}': removing column B (index 1) — contains footnote marker ※", sheet.getName());
+        }
+
         // Step 3: resolve multi-row headers into a single label per remaining column
         List<String> resolvedHeaders = headerResolver.resolve(sheet.getRawHeaderRows(), columnsToKeep);
+
+        // Step 3b: second "Model Type" (engine model under 原動機) → "Engine"
+        resolvedHeaders = disambiguateDuplicateModelType(resolvedHeaders, sheet.getName());
 
         // Step 4: drop columns whose resolved header is empty (e.g. spacer/footnote columns)
         List<Integer> namedColumns = new ArrayList<>();
@@ -136,6 +145,12 @@ public class WorkBookProcessor {
      * Columns with similar fill rates are kept and numbered (2), (3)…
      */
     private static final double DEDUP_FILL_RATIO_THRESHOLD = 0.5;
+
+    /** Footnote/marker characters and prefixes (e.g. ※, ※1, ※2) that indicate a column is not real data. */
+    private static final Set<String> FOOTNOTE_MARKERS = Set.of("※", "注", "＊", "*", "†", "‡");
+
+    /** Values starting with these characters are treated as footnote markers (e.g. ※1, ※2). */
+    private static final Set<String> FOOTNOTE_PREFIXES = Set.of("※", "＊");
 
     /**
      * Resolves duplicate header labels by comparing data fill rates.
@@ -201,6 +216,33 @@ public class WorkBookProcessor {
                 if (positions.size() <= 1) continue;
             }
 
+            // Drop footnote/marker columns (e.g. ※) that inherited header from merged cells
+            for (int pos : positions) {
+                if (toDrop.contains(pos)) continue;
+                if (isFootnoteColumn(rows, colIndices.get(pos))) {
+                    toDrop.add(pos);
+                    log.info("Sheet '{}': dropping duplicate column {} ('{}') — data is footnote markers (※ etc.)",
+                            sheetName, colIndices.get(pos), entry.getKey());
+                }
+            }
+            positions = positions.stream().filter(p -> !toDrop.contains(p)).toList();
+            if (positions.size() <= 1) continue;
+
+            // Drop identical columns — keep first, drop subsequent duplicates with same data
+            for (int i = 0; i < positions.size(); i++) {
+                if (toDrop.contains(positions.get(i))) continue;
+                for (int j = i + 1; j < positions.size(); j++) {
+                    if (toDrop.contains(positions.get(j))) continue;
+                    if (columnsHaveIdenticalData(rows, colIndices.get(positions.get(i)), colIndices.get(positions.get(j)))) {
+                        toDrop.add(positions.get(j));
+                        log.info("Sheet '{}': dropping duplicate column {} ('{}') — identical data to column {}",
+                                sheetName, colIndices.get(positions.get(j)), entry.getKey(), colIndices.get(positions.get(i)));
+                    }
+                }
+            }
+            positions = positions.stream().filter(p -> !toDrop.contains(p)).toList();
+            if (positions.size() <= 1) continue;
+
             double maxFill = positions.stream()
                     .mapToDouble(i -> fillRate(rows, colIndices.get(i), totalRows))
                     .max().orElse(0);
@@ -229,9 +271,38 @@ public class WorkBookProcessor {
             if (count > 1) {
                 log.info("Sheet '{}': duplicate header '{}' renamed to '{}'", sheetName, label, finalLabel);
             }
-            outHeaders.add(finalLabel);
+            outHeaders.add(stripDuplicateSuffix(finalLabel));
             outCols.add(colIndices.get(i));
         }
+    }
+
+    /** Removes trailing " (2)", " (3)", etc. from header labels. */
+    private static String stripDuplicateSuffix(String header) {
+        if (header == null || header.isEmpty()) return header;
+        return header.replaceFirst(" \\(\\d+\\)$", "");
+    }
+
+    /**
+     * When a sheet has two "Model Type" columns (vehicle model + engine model under 原動機),
+     * the second one should be "Engine". Replaces the second occurrence with "Engine".
+     */
+    private static List<String> disambiguateDuplicateModelType(List<String> headers, String sheetName) {
+        boolean seenModelType = false;
+        List<String> result = new ArrayList<>(headers.size());
+        for (String h : headers) {
+            if ("Model Type".equals(h)) {
+                if (seenModelType) {
+                    log.info("Sheet '{}': second 'Model Type' (engine model under 原動機) → 'Engine'", sheetName);
+                    result.add("Engine");
+                } else {
+                    seenModelType = true;
+                    result.add(h);
+                }
+            } else {
+                result.add(h);
+            }
+        }
+        return result;
     }
 
     /**
@@ -276,6 +347,54 @@ public class WorkBookProcessor {
         }
         if (nonEmpty < 2) return false;
         return (double) labelCount / nonEmpty >= 0.5;
+    }
+
+    /**
+     * Returns true if this column is mostly footnote/marker characters (※, ※1, 注, etc.)
+     * that inherited their header from a merged parent. These columns add no value.
+     */
+    private boolean isFootnoteColumn(List<RowData> rows, int colIndex) {
+        List<RowData> dataRows = rows.stream()
+                .filter(row -> nonEmptyCellCount(row) >= DATA_ROW_MIN_CELLS)
+                .toList();
+        if (dataRows.isEmpty()) return false;
+
+        long nonEmpty = 0;
+        long markerCount = 0;
+        for (RowData row : dataRows) {
+            String val = row.getCell(colIndex).trim();
+            if (val.isEmpty()) continue;
+            nonEmpty++;
+            if (isFootnoteValue(val)) markerCount++;
+        }
+        if (nonEmpty < 2) return false;
+        return (double) markerCount / nonEmpty >= 0.5;
+    }
+
+    private static boolean isFootnoteValue(String val) {
+        if (FOOTNOTE_MARKERS.contains(val)) return true;
+        return FOOTNOTE_PREFIXES.stream().anyMatch(val::startsWith);
+    }
+
+    /** Returns true if column contains 1 or more ※ (footnote marker) in any cell. */
+    private static boolean columnContainsFootnoteMarker(List<RowData> rows, int colIndex) {
+        for (RowData row : rows) {
+            String val = row.getCell(colIndex).trim();
+            if (val.contains("※")) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Returns true if the two columns have identical values in every row.
+     */
+    private boolean columnsHaveIdenticalData(List<RowData> rows, int colA, int colB) {
+        for (RowData row : rows) {
+            String a = row.getCell(colA).trim();
+            String b = row.getCell(colB).trim();
+            if (!a.equals(b)) return false;
+        }
+        return true;
     }
 
     private double fillRate(List<RowData> rows, int colIndex, int totalRows) {

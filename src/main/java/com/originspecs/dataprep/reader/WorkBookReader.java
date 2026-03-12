@@ -12,11 +12,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class WorkBookReader {
@@ -24,6 +26,7 @@ public class WorkBookReader {
     private final DataFormatter formatter = new DataFormatter();
     private final HeaderRangeDetector headerRangeDetector;
     private final Set<String> japaneseBrandNames;
+    private final Set<String> normalizedBrandNames;
 
     /** Creates a reader without brand-based header detection or data-start validation. */
     public WorkBookReader() {
@@ -40,8 +43,11 @@ public class WorkBookReader {
      * @param japaneseBrandNames Set of Japanese brand names (e.g. "ホンダ", "トヨタ")
      */
     public WorkBookReader(Set<String> japaneseBrandNames) {
-        this.japaneseBrandNames = japaneseBrandNames;
-        this.headerRangeDetector = new HeaderRangeDetector(japaneseBrandNames);
+        this.japaneseBrandNames = japaneseBrandNames != null ? japaneseBrandNames : Set.of();
+        this.normalizedBrandNames = this.japaneseBrandNames.stream()
+                .map(b -> Normalizer.normalize(b, Normalizer.Form.NFKC))
+                .collect(Collectors.toSet());
+        this.headerRangeDetector = new HeaderRangeDetector(this.japaneseBrandNames);
     }
 
     /**
@@ -225,7 +231,8 @@ public class WorkBookReader {
         Cell carNameCell = firstDataRow.getCell(carNameColIndex, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
         String cellValue = carNameCell == null ? "" : formatter.formatCellValue(carNameCell).strip();
 
-        if (japaneseBrandNames.contains(cellValue)) {
+        String normalized = Normalizer.normalize(cellValue, Normalizer.Form.NFKC);
+        if (normalizedBrandNames.contains(normalized)) {
             log.debug("Sheet '{}': data start confirmed — first row has brand '{}' in Car Name column (col {})",
                     sheet.getSheetName(), cellValue, carNameColIndex);
         } else {

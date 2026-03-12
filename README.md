@@ -27,32 +27,34 @@ sequenceDiagram
     participant HeaderResolver
     participant WorkBookWriter
 
-    User->>Main: java -jar dataprep.jar input.xls output.xls 0.01
+    User->>Main: java -jar dataprep.jar 0.01
     Main->>CliParser: parseOrExit(args)
-    CliParser-->>Main: Config(inputFile, outputFile, columnThreshold)
+    CliParser-->>Main: Config(inputDir, outputDir, columnThreshold)
     Main->>DataPrepOrchestrator: run(config)
     Note over DataPrepOrchestrator: Loads permittedHeaders.csv (JP→EN mapping)<br/>Loads autoList.csv (brand name list)
-    DataPrepOrchestrator->>WorkBookReader: read(inputFile)
-    loop For each worksheet in workbook
-        WorkBookReader->>HeaderRangeDetector: detect(sheet, brandNames)
-        Note over HeaderRangeDetector: Anchors on 車名 row<br/>Scans back for pre-headers<br/>Scans forward for first brand row
-        HeaderRangeDetector-->>WorkBookReader: HeaderRange(startRow, endRow)
-        WorkBookReader-->>WorkBookReader: extractRawHeaderRows(headerRange)
-        WorkBookReader-->>WorkBookReader: extractDataRows(dataStartRow)
+    loop For each .xls in input dir
+        DataPrepOrchestrator->>WorkBookReader: read(inputFile)
+        loop For each worksheet in workbook
+            WorkBookReader->>HeaderRangeDetector: detect(sheet, brandNames)
+            Note over HeaderRangeDetector: Anchors on 車名 row<br/>Scans back for pre-headers<br/>Scans forward for first brand row
+            HeaderRangeDetector-->>WorkBookReader: HeaderRange(startRow, endRow)
+            WorkBookReader-->>WorkBookReader: extractRawHeaderRows(headerRange)
+            WorkBookReader-->>WorkBookReader: extractDataRows(dataStartRow)
+        end
+        WorkBookReader-->>DataPrepOrchestrator: WorkBookData
+        DataPrepOrchestrator->>WorkBookProcessor: process(workBookData, columnThreshold)
+        loop For each worksheet
+            WorkBookProcessor-->>WorkBookProcessor: determineColumnsToKeep(threshold)
+            WorkBookProcessor->>HeaderResolver: resolve(rawHeaderRows, columnsToKeep)
+            Note over HeaderResolver: Scans bottom-to-top per column<br/>Normalises newlines, matches permittedHeaders<br/>Falls back to bottom-most non-empty value
+            HeaderResolver-->>WorkBookProcessor: resolvedHeaders[]
+            WorkBookProcessor-->>WorkBookProcessor: resolveDuplicates() — fill-rate comparison
+            WorkBookProcessor-->>WorkBookProcessor: fillDownGroupColumns() — Car Name & Common Name
+        end
+        WorkBookProcessor-->>DataPrepOrchestrator: WorkBookData (processed)
+        DataPrepOrchestrator->>WorkBookWriter: write(workBookData, outputPath)
+        WorkBookWriter-->>DataPrepOrchestrator: output file written
     end
-    WorkBookReader-->>DataPrepOrchestrator: WorkBookData
-    DataPrepOrchestrator->>WorkBookProcessor: process(workBookData, columnThreshold)
-    loop For each worksheet
-        WorkBookProcessor-->>WorkBookProcessor: determineColumnsToKeep(threshold)
-        WorkBookProcessor->>HeaderResolver: resolve(rawHeaderRows, columnsToKeep)
-        Note over HeaderResolver: Scans bottom-to-top per column<br/>Normalises newlines, matches permittedHeaders<br/>Falls back to bottom-most non-empty value
-        HeaderResolver-->>WorkBookProcessor: resolvedHeaders[]
-        WorkBookProcessor-->>WorkBookProcessor: resolveDuplicates() — fill-rate comparison
-        WorkBookProcessor-->>WorkBookProcessor: fillDownGroupColumns() — Car Name & Common Name
-    end
-    WorkBookProcessor-->>DataPrepOrchestrator: WorkBookData (processed)
-    DataPrepOrchestrator->>WorkBookWriter: write(workBookData, outputPath)
-    WorkBookWriter-->>DataPrepOrchestrator: output file written
     DataPrepOrchestrator-->>Main: done
     Main-->>User: Exit 0
 ```
@@ -61,6 +63,7 @@ sequenceDiagram
 
 ```
 DataPrep/
+├── autoList.csv                   # Canonical Japanese car brand names
 ├── src/main/java/…/
 │   ├── config/          # CLI parsing, Config record, constants, CSV loaders
 │   ├── model/           # Data models: WorkBookData, WorkSheetData, RowData, CarBrand
@@ -72,10 +75,9 @@ DataPrep/
     ├── diagrams/
     │   └── dataprep-pipeline.md   # Mermaid sequence diagram + draw.io import guide
     ├── local-data/
-    │   ├── *.xls                  # Input files (not committed)
-    │   ├── output/                # Generated output files (git-ignored)
-    │   ├── permittedHeaders.csv   # Japanese → English header mapping
-    │   └── autoList.csv           # Canonical Japanese car brand names
+    │   ├── input/                 # Place .xls input files here
+    │   ├── output/                # Processed output files (same filenames)
+    │   └── permittedHeaders.csv   # Japanese → English header mapping
     └── logback.xml
 ```
 
@@ -106,47 +108,49 @@ The runnable fat-JAR is produced at `target/dataprep-1.0-SNAPSHOT-jar-with-depen
 
 ## Running
 
-```bash
-java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar \
-  <inputFile.xls> <outputFile.xls> <columnThreshold>
-```
+**Run from the DataPrep project root.** The application processes all `.xls` files in `src/main/resources/local-data/input/` and writes them to `src/main/resources/local-data/output/` (same filenames).
 
-All three arguments are **required**.
+```bash
+java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar [columnThreshold]
+```
 
 ### Arguments
 
 | Argument | Description |
 |---|---|
-| `inputFile.xls` | Path to the source `.xls` file |
-| `outputFile.xls` | Path where the processed `.xls` file will be written (output directory is created automatically) |
-| `columnThreshold` | Minimum data fill ratio `0.0–1.0` to keep a column |
+| `columnThreshold` | Optional. Minimum data fill ratio `0.0–1.0` to keep a column. Default: `0.01` |
+
+### Input/Output
+
+| Location | Purpose |
+|---|---|
+| `src/main/resources/local-data/input/` | Place your `.xls` source files here |
+| `src/main/resources/local-data/output/` | Processed files are written here (same filenames as input) |
 
 ### Column Threshold Guide
 
 | Value | Effect |
 |---|---|
-| `0.01` | Keep any column with at least 1% fill — recommended for most inputs |
+| `0.01` | Keep any column with at least 1% fill — recommended for most inputs (default) |
 | `0.05` | Keep columns with ≥ 5% fill — removes very sparse annotation columns |
 | `0.10` | Keep columns with ≥ 10% fill — more aggressive; may drop sparse-but-valid columns like Car Name |
 
 > The **Car Name** (`車名`) column is always kept regardless of the threshold.
 
-### Example
+### Examples
 
 ```bash
-java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar \
-  src/main/resources/local-data/5.1.Gzyouyou_WLTC.xls \
-  src/main/resources/local-data/output/5.1.Gzyouyou_WLTC_output.xls \
-  0.01
+# Process all files in input/ with default threshold (0.01)
+java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar
+
+# Process all files with 5% fill threshold
+java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar 0.05
 ```
 
 ### Debug Logging
 
 ```bash
-java -DLOG_LEVEL=DEBUG -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar \
-  src/main/resources/local-data/5.1.Gzyouyou_WLTC.xls \
-  src/main/resources/local-data/output/5.1.Gzyouyou_WLTC_output.xls \
-  0.01
+java -DLOG_LEVEL=DEBUG -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar 0.01
 ```
 
 ## Configuration Files
@@ -163,7 +167,7 @@ japanese,english
 ...
 ```
 
-### `src/main/resources/local-data/autoList.csv`
+### `autoList.csv` (project root)
 
 Contains the canonical list of Japanese car brand names (e.g. `トヨタ`, `ホンダ`). This is used by `HeaderRangeDetector` to identify where header rows end and data rows begin.
 

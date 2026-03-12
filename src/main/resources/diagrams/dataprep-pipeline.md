@@ -25,16 +25,17 @@ sequenceDiagram
     participant HeaderResolver
     participant WorkBookWriter
 
-    User->>Main: java -jar dataprep.jar input.xls output.xls 0.01
+    User->>Main: java -jar dataprep.jar 0.01
 
     Main->>CliParser: parseOrExit(args)
-    CliParser-->>Main: Config(inputFile, outputFile, columnThreshold)
+    CliParser-->>Main: Config(inputDir, outputDir, columnThreshold)
 
     Main->>DataPrepOrchestrator: run(config)
 
     Note over DataPrepOrchestrator: Loads permittedHeaders.csv (JP→EN mapping)<br/>Loads autoList.csv (brand name list)
 
-    DataPrepOrchestrator->>WorkBookReader: read(inputFile)
+    loop For each .xls in input dir
+        DataPrepOrchestrator->>WorkBookReader: read(inputFile)
 
     loop For each worksheet in workbook
         WorkBookReader->>HeaderRangeDetector: detect(sheet, brandNames)
@@ -65,6 +66,7 @@ sequenceDiagram
     Note over WorkBookWriter: Creates HSSFWorkbook<br/>Writes single header row per sheet<br/>Writes all data rows
     WorkBookWriter-->>DataPrepOrchestrator: output file written
 
+    end
     DataPrepOrchestrator-->>Main: done
     Main-->>User: Exit 0
 ```
