@@ -11,6 +11,7 @@ import com.originspecs.dataprep.writer.WorkBookWriter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -55,21 +56,33 @@ public class DataPrepOrchestrator {
     }
 
     /**
-     * Executes the complete data preparation pipeline.
+     * Executes the complete data preparation pipeline for all .xls files in the input directory.
      *
-     * @param config Configuration containing input/output paths and processing parameters
+     * @param config Configuration containing input/output directories and column threshold
      * @throws IOException if reading or writing fails
      */
     public void execute(Config config) throws IOException {
         log.info("Starting data preparation pipeline");
-        log.info("Input: {} | Output: {} | Column threshold: {}",
-                config.inputFile(), config.outputFile(), config.columnThreshold());
+        log.info("Input dir: {} | Output dir: {} | Column threshold: {}",
+                config.inputDir(), config.outputDir(), config.columnThreshold());
 
-        WorkBookData workBook = read(config.inputFile());
-        WorkBookData processed = process(workBook, config.columnThreshold());
-        write(processed, config.outputFile());
+        Files.createDirectories(config.outputDir());
 
-        log.info("Pipeline completed successfully");
+        List<Path> inputFiles = config.inputFiles();
+        if (inputFiles.isEmpty()) {
+            log.warn("No .xls files to process — exiting");
+            return;
+        }
+
+        for (Path inputFile : inputFiles) {
+            Path outputFile = config.outputFileFor(inputFile);
+            log.info("Processing: {} → {}", inputFile.getFileName(), outputFile.getFileName());
+            WorkBookData workBook = read(inputFile);
+            WorkBookData processed = process(workBook, config.columnThreshold());
+            write(processed, outputFile);
+        }
+
+        log.info("Pipeline completed successfully — {} file(s) processed", inputFiles.size());
     }
 
     private WorkBookData read(Path inputFile) throws IOException {

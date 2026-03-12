@@ -74,7 +74,12 @@ public class HeaderResolver {
             }
 
             if (permittedHeaders.containsKey(value)) {
-                return permittedHeaders.get(value);
+                String resolved = permittedHeaders.get(value);
+                // 型式 under 原動機 (Engine) group → Engine; otherwise Model Type
+                if ("Model Type".equals(resolved) && isUnderEngineGroup(rawHeaderRows, colIndex, rowIdx)) {
+                    return "Engine";
+                }
+                return resolved;
             }
         }
 
@@ -86,6 +91,19 @@ public class HeaderResolver {
         }
 
         return fallback;
+    }
+
+    /**
+     * Returns true if this column has 原動機 (Engine) in any header row above the given row.
+     * Used to disambiguate 型式: vehicle model type vs engine model type under 原動機.
+     */
+    private static boolean isUnderEngineGroup(List<List<String>> rawHeaderRows, int colIndex, int belowRowIdx) {
+        for (int r = 0; r < belowRowIdx; r++) {
+            if (colIndex >= rawHeaderRows.get(r).size()) continue;
+            String cell = normalize(rawHeaderRows.get(r).get(colIndex));
+            if ("原動機".equals(cell)) return true;
+        }
+        return false;
     }
 
     /**

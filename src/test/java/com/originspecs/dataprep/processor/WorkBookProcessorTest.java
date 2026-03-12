@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -39,14 +40,18 @@ class WorkBookProcessorTest {
      * Permitted header map covering all labels used in test sheets.
      * Additional entries for "sparse" and "dense" column names used in threshold tests.
      */
-    private static final Map<String, String> PERMITTED = Map.of(
-            "車名",    "Car Name",
-            "通称名",  "Common Name",
-            "型式",    "Model Type",
-            "エンジン", "Engine",
-            "重量",    "Weight",
-            "排気量",  "Displacement"
-    );
+    private static final Map<String, String> PERMITTED;
+    static {
+        var m = new LinkedHashMap<String, String>();
+        m.put("車名", "Car Name");
+        m.put("通称名", "Common Name");
+        m.put("型式", "Model Type");
+        m.put("エンジン", "Engine");
+        m.put("原動機", "Engine");
+        m.put("重量", "Weight");
+        m.put("排気量", "Displacement");
+        PERMITTED = m;
+    }
 
     private WorkBookProcessor processor;
 
@@ -201,7 +206,73 @@ class WorkBookProcessorTest {
             List<String> headers = result.getWorksheets().get(0).getHeaders();
 
             assertThat(headers).contains("Common Name");
-            assertThat(headers).contains("Common Name (2)");
+            // Both duplicate columns kept; (2) suffix stripped so we have "Common Name" twice
+            assertThat(headers.stream().filter(h -> h.equals("Common Name")).count()).isEqualTo(2);
+        }
+
+        @Test
+        void duplicateColumn_withFootnoteMarkers_isDropped() {
+            // Col 1 = ※ (footnote marker), Col 2 = actual model names — both under 通称名 from merged header
+            WorkSheetData sheet = buildSheet(
+                    rawHeaders("車名", "通称名", "通称名", "エンジン", "重量", "排気量"),
+                    dataRow("トヨタ", "※", "ピクシスエポ", "KF", "800kg", "0.66L"),
+                    dataRow("",      "※", "ピクシスジョ", "KF", "800kg", "0.66L"),
+                    dataRow("",      "※", "コペン",      "KF", "830kg", "0.66L"),
+                    dataRow("",      "※", "ピクシスメガ", "KF", "900kg", "0.66L"),
+                    dataRow("",      "※", "ピクシスメガ", "KF", "920kg", "0.66L")
+            );
+
+            WorkBookData result = processor.process(workBook(sheet), 0.01);
+            List<String> headers = result.getWorksheets().get(0).getHeaders();
+
+            long commonNameCount = headers.stream()
+                    .filter(h -> h.equals("Common Name") || h.startsWith("Common Name ("))
+                    .count();
+            assertThat(commonNameCount).isEqualTo(1);
+            int idx = headers.indexOf("Common Name");
+            assertThat(result.getWorksheets().get(0).getRows().get(0).getCell(idx)).isEqualTo("ピクシスエポ");
+        }
+
+        @Test
+        void duplicateColumn_withFootnoteMarkerVariants_isDropped() {
+            // Col 1 = ※1 (footnote with number), Col 2 = actual model names — drop ※1, keep model names as "Common Name"
+            WorkSheetData sheet = buildSheet(
+                    rawHeaders("車名", "通称名", "通称名", "エンジン", "重量", "排気量"),
+                    dataRow("マツダ", "※1", "キャロル",   "KF", "800kg", "0.66L"),
+                    dataRow("",      "※1", "フレア",     "KF", "800kg", "0.66L"),
+                    dataRow("",      "※1", "フレア クロスオーバー", "KF", "830kg", "0.66L"),
+                    dataRow("",      "※1", "フレア ワゴン", "KF", "900kg", "0.66L"),
+                    dataRow("",      "※1", "スクラム",   "KF", "920kg", "0.66L")
+            );
+
+            WorkBookData result = processor.process(workBook(sheet), 0.01);
+            List<String> headers = result.getWorksheets().get(0).getHeaders();
+
+            assertThat(headers).contains("Common Name");
+            assertThat(headers).doesNotContain("Common Name (2)");
+            int idx = headers.indexOf("Common Name");
+            assertThat(result.getWorksheets().get(0).getRows().get(0).getCell(idx)).isEqualTo("キャロル");
+        }
+
+        @Test
+        void duplicateColumns_withIdenticalData_secondDropped() {
+            // Col 2 and col 3 both have Engine header and identical data (KF, 0.658)
+            WorkSheetData sheet = buildSheet(
+                    rawHeaders("車名", "通称名", "原動機", "原動機", "重量", "排気量"),
+                    dataRow("トヨタ", "コペン", "KF", "KF", "830kg", "0.66L"),
+                    dataRow("",      "コペン", "KF", "KF", "830kg", "0.66L"),
+                    dataRow("",      "ピクシス", "KF", "KF", "800kg", "0.66L"),
+                    dataRow("",      "ピクシス", "KF", "KF", "800kg", "0.66L"),
+                    dataRow("",      "ピクシス", "KF", "KF", "800kg", "0.66L")
+            );
+
+            WorkBookData result = processor.process(workBook(sheet), 0.01);
+            List<String> headers = result.getWorksheets().get(0).getHeaders();
+
+            long engineCount = headers.stream()
+                    .filter(h -> h.equals("Engine") || h.startsWith("Engine ("))
+                    .count();
+            assertThat(engineCount).isEqualTo(1);
         }
     }
 

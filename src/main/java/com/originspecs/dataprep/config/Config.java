@@ -2,24 +2,40 @@ package com.originspecs.dataprep.config;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.Stream;
 
 @Slf4j
 public record Config(
-        Path inputFile,
-        Path outputFile,
+        Path inputDir,
+        Path outputDir,
         double columnThreshold
 ) {
+
+    private static final String DEFAULT_INPUT_DIR = "src/main/resources/local-data/input";
+    private static final String DEFAULT_OUTPUT_DIR = "src/main/resources/local-data/output";
+    private static final double DEFAULT_COLUMN_THRESHOLD = 0.01;
+
+    /**
+     * Creates config from CLI args. Accepts 0 or 1 argument:
+     * <ul>
+     *   <li>0 args: use default column threshold 0.01</li>
+     *   <li>1 arg: column threshold (0.0–1.0)</li>
+     * </ul>
+     * Input and output directories use defaults relative to the working directory.
+     */
     public static Config fromArgs(String[] args) {
-        if (args.length != 3) {
-            throw new IllegalArgumentException("Exactly 3 arguments required: <inputFile> <outputFile> <columnThreshold>");
+        if (args.length > 1) {
+            throw new IllegalArgumentException("At most 1 argument (columnThreshold) allowed");
         }
-
-        var inputFile = Path.of(args[0]);
-        var outputFile = Path.of(args[1]);
-        var columnThreshold = parseColumnThreshold(args[2]);
-
-        return new Config(inputFile, outputFile, columnThreshold);
+        double columnThreshold = args.length >= 1 ? parseColumnThreshold(args[0]) : DEFAULT_COLUMN_THRESHOLD;
+        return new Config(
+                Path.of(DEFAULT_INPUT_DIR),
+                Path.of(DEFAULT_OUTPUT_DIR),
+                columnThreshold
+        );
     }
 
     private static double parseColumnThreshold(String arg) {
@@ -35,13 +51,40 @@ public record Config(
     }
 
     public void validate() {
-        if (!inputFile.toFile().exists()) {
-            throw new IllegalArgumentException("Input file does not exist: " + inputFile.toAbsolutePath());
+        if (!inputDir.toFile().exists()) {
+            throw new IllegalArgumentException("Input directory does not exist: " + inputDir.toAbsolutePath());
         }
+        if (!inputDir.toFile().isDirectory()) {
+            throw new IllegalArgumentException("Input path is not a directory: " + inputDir.toAbsolutePath());
+        }
+        try (Stream<Path> stream = Files.list(inputDir)) {
+            long xlsCount = stream.filter(p -> p.toString().toLowerCase().endsWith(".xls")).count();
+            if (xlsCount == 0) {
+                log.warn("No .xls files found in input directory: {}", inputDir.toAbsolutePath());
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Cannot list input directory: " + e.getMessage());
+        }
+        var outputParent = outputDir.toFile();
+        if (!outputParent.exists()) {
+            log.info("Output directory will be created: {}", outputDir.toAbsolutePath());
+        }
+    }
 
-        var parentDir = outputFile.getParent();
-        if (parentDir != null && !parentDir.toFile().exists()) {
-            log.info("Output directory will be created: {}", parentDir.toAbsolutePath());
+    /** Returns paths to all .xls files in the input directory. */
+    public List<Path> inputFiles() {
+        try (Stream<Path> stream = Files.list(inputDir)) {
+            return stream
+                    .filter(p -> p.toString().toLowerCase().endsWith(".xls"))
+                    .sorted()
+                    .toList();
+        } catch (Exception e) {
+            throw new IllegalStateException("Cannot list input directory: " + e.getMessage());
         }
+    }
+
+    /** Returns the output path for a given input file (same filename in output dir). */
+    public Path outputFileFor(Path inputFile) {
+        return outputDir.resolve(inputFile.getFileName());
     }
 }

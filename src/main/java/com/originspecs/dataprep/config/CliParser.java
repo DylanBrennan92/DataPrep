@@ -6,9 +6,12 @@ import lombok.extern.slf4j.Slf4j;
 public class CliParser {
 
     private static final String USAGE = """
-            Usage: java -jar DataPrep.jar <inputFile.xls> <outputFile.xls> <columnThreshold>
-            columnThreshold: Value between 0.0 and 1.0 (e.g. 0.1 = 10%% minimum fill to keep column)
-            Example: java -jar target/DataPrep.jar nissan.xls output.xls 0.1
+            Usage: java -jar DataPrep.jar [columnThreshold]
+            Processes all .xls files in src/main/resources/local-data/input/
+            and writes to src/main/resources/local-data/output/ (same filenames).
+            columnThreshold: Optional, 0.0–1.0 (default 0.01). Min fill ratio to keep a column.
+            Example: java -jar target/DataPrep.jar 0.01
+            Example: java -jar target/DataPrep.jar
             """;
 
     /**

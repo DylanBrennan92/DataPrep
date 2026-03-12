@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Detects the full header row range within an XLS sheet.
@@ -40,6 +42,8 @@ public class HeaderRangeDetector {
 
     private final DataFormatter formatter = new DataFormatter();
     private final Set<String> japaneseBrandNames;
+    /** NFKC-normalized brand names for matching half-width katakana (e.g. ﾄﾖﾀ) to full-width (トヨタ). */
+    private final Set<String> normalizedBrandNames;
 
     /** Creates a detector without brand-based data-start detection (legacy fallback). */
     public HeaderRangeDetector() {
@@ -53,7 +57,10 @@ public class HeaderRangeDetector {
      * @param japaneseBrandNames Set of Japanese car brand names (e.g. "ホンダ", "トヨタ")
      */
     public HeaderRangeDetector(Set<String> japaneseBrandNames) {
-        this.japaneseBrandNames = japaneseBrandNames;
+        this.japaneseBrandNames = japaneseBrandNames != null ? japaneseBrandNames : Set.of();
+        this.normalizedBrandNames = this.japaneseBrandNames.stream()
+                .map(b -> Normalizer.normalize(b, Normalizer.Form.NFKC))
+                .collect(Collectors.toSet());
     }
 
     /**
@@ -206,7 +213,7 @@ public class HeaderRangeDetector {
                 if (cell == null) continue;
 
                 String cellValue = formatter.formatCellValue(cell).strip();
-                if (japaneseBrandNames.contains(cellValue)) {
+                if (isKnownBrand(cellValue)) {
                     log.debug("Sheet '{}': found brand '{}' at row {} (col {}) — header range ends at row {}, Car Name col {}",
                             sheet.getSheetName(), cellValue, i, colIndex, i - 1, colIndex);
                     return new EndAndColumn(i - 1, colIndex);
@@ -228,5 +235,12 @@ public class HeaderRangeDetector {
             }
         }
         return count;
+    }
+
+    /** Matches cell value against brand names using NFKC normalization (half-width ﾄﾖﾀ → full-width トヨタ). */
+    private boolean isKnownBrand(String cellValue) {
+        if (cellValue == null || cellValue.isEmpty()) return false;
+        String normalized = Normalizer.normalize(cellValue, Normalizer.Form.NFKC);
+        return normalizedBrandNames.contains(normalized);
     }
 }
