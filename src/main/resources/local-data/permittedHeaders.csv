@@ -1,0 +1,49 @@
+japanese,english
+車名,Car Name
+通称名,Common Name
+型式,Model Type
+類別区分番号,Classification Number
+総排気量,Engine Displacement
+総排気量（L）,Engine Displacement (L)
+（L）,Engine Displacement (L)
+変速装置,Transmission
+変速装置の型式及び変速段数,Transmission Type and Stages
+乗車定員,Passenger Capacity
+乗車定員（名）,Passenger Capacity
+車両重量,Vehicle Weight
+車両重量（kg）,Vehicle Weight (kg)
+燃費値,Fuel Economy
+燃費値（km/L）,Fuel Economy (km/L)
+WLTCモード,WLTC Mode
+１０・１５モード,10·15 Mode
+原動機,Engine
+変速段数,Number of Gears
+非表示枠,Hidden Frame
+燃費基準達成・向上達成レベル,Fuel Efficiency Achievement Level
+(Ｌ）,Engine Displacement (L)
+（g-CO2/km）,CO2 Emissions (g/km)
+(ｇ -ＣＯ2/km）,CO2 Emissions (g/km)
+1km走行におけるCO2排出量（g-CO2/km）,CO2 Emissions (g/km)
+平成27年度燃費基準値（km/L）,FY2015 Fuel Economy Standard (km/L)
+平成32年度燃費基準値（km/L）,FY2020 Fuel Economy Standard (km/L)
+市街地モード,Urban Mode
+郊外モード,Suburban Mode
+高速道路モード,Highway Mode
+市街地,Urban
+郊外,Suburban
+高速道路,Highway
+改善率,Improvement Rate
+低排出ガス,Low Emission
+主要排出ガス対策,Emission Countermeasures
+対策,Emission Countermeasures
+低排出ガス車認定レベル,Low Emission Certification Level
+達成レベル,Achievement Level
+レベル,Level
+排出ガス,Emissions
+駆動形式,Drive Type
+形式,Drive Type
+その他,Other Factors
+平成27年度燃費基準,FY2015 Fuel Economy Standard
+平成27年度燃費基準達成・向上達成レベル,FY2015 Achievement Level
+平成32年度燃費基準,FY2020 Fuel Economy Standard
+平成32年度燃費基準達成・向上達成レベル,FY2020 Achievement Level
