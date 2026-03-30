@@ -3,6 +3,7 @@ package com.originspecs.dataprep.orchestration;
 import com.originspecs.dataprep.config.CarListBuilder;
 import com.originspecs.dataprep.config.Config;
 import com.originspecs.dataprep.config.PermittedHeadersBuilder;
+import com.originspecs.dataprep.input.InputWorkbooks;
 import com.originspecs.dataprep.model.CarBrand;
 import com.originspecs.dataprep.model.WorkBookData;
 import com.originspecs.dataprep.processor.WorkBookProcessor;
@@ -13,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,17 +60,19 @@ public class DataPrepOrchestrator {
     /**
      * Executes the complete data preparation pipeline for all .xls files in the input directory.
      *
-     * @param config Configuration containing input/output directories and column threshold
+     * @param config Configuration containing input/output/artifacts directories, optional source artifact id, and column threshold
      * @throws IOException if reading or writing fails
      */
     public void execute(Config config) throws IOException {
         log.info("Starting data preparation pipeline");
-        log.info("Input dir: {} | Output dir: {} | Column threshold: {}",
-                config.inputDir(), config.outputDir(), config.columnThreshold());
+        log.info("Input dir: {} | Output dir: {} | Artifacts dir: {} | Source artifact id: {} | Column threshold: {}",
+                config.inputDir(), config.outputDir(), config.artifactsDir(),
+                config.sourceArtifactId().orElse("(none)"), config.columnThreshold());
 
         Files.createDirectories(config.outputDir());
+        Files.createDirectories(config.artifactsDir());
 
-        List<Path> inputFiles = config.inputFiles();
+        List<Path> inputFiles = InputWorkbooks.listSorted(config.inputDir());
         if (inputFiles.isEmpty()) {
             log.warn("No .xls files to process — exiting");
             return;
@@ -77,6 +81,11 @@ public class DataPrepOrchestrator {
         for (Path inputFile : inputFiles) {
             Path outputFile = config.outputFileFor(inputFile);
             log.info("Processing: {} → {}", inputFile.getFileName(), outputFile.getFileName());
+            if (config.sourceArtifactId().isPresent()) {
+                Path artifactPath = config.artifactCopyDestination(inputFile);
+                Files.copy(inputFile, artifactPath, StandardCopyOption.REPLACE_EXISTING);
+                log.info("Copied source artifact: {}", artifactPath.toAbsolutePath());
+            }
             WorkBookData workBook = read(inputFile);
             WorkBookData processed = process(workBook, config.columnThreshold());
             write(processed, outputFile);

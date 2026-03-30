@@ -90,3 +90,8 @@ dist/
 *.odt
 *.ott
 .~lock.*
+
+# Reference CSVs versioned in-repo (exceptions to *.csv above)
+!src/main/resources/local-data/permittedHeaders.csv
+!src/test/resources/local-data/permittedHeaders.csv
+!autoList.csv
