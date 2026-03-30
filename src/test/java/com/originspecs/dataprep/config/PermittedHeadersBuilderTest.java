@@ -4,9 +4,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -74,8 +77,12 @@ class PermittedHeadersBuilderTest {
     }
 
     @Test
-    void load_fromTestResources_loadsFile() {
-        Path testResource = Path.of("src/test/resources/local-data/permittedHeaders.csv");
+    void load_fromTestResources_loadsFile() throws URISyntaxException {
+        Path testResource = Paths.get(
+                Objects.requireNonNull(
+                        PermittedHeadersBuilderTest.class.getResource("/local-data/permittedHeaders.csv"),
+                        "classpath resource /local-data/permittedHeaders.csv (from src/test/resources)")
+                        .toURI());
         Map<String, String> result = PermittedHeadersBuilder.load(testResource.toString());
 
         assertThat(result)
