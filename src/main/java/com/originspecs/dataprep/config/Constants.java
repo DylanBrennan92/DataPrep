@@ -2,7 +2,7 @@ package com.originspecs.dataprep.config;
 
 public class Constants {
 
-    /** Directory for immutable copies of original ministry workbooks (see {@code --source-artifact-id}). */
+    /** Directory for immutable copies of original ministry workbooks (one file per generated sourceArtifactId). */
     public static final String ARTIFACTS_DIR = "src/main/resources/local-data/artifacts";
 
     // Header constants

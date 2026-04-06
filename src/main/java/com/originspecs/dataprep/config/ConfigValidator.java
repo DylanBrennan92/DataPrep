@@ -8,7 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * Validates {@link Config} against the filesystem (input layout, artifact-id rules).
+ * Validates {@link Config} against the filesystem (input layout).
  */
 @Slf4j
 public final class ConfigValidator {
@@ -24,11 +24,6 @@ public final class ConfigValidator {
             throw new IllegalArgumentException("Input path is not a directory: " + inputDir.toAbsolutePath());
         }
         List<Path> xlsFiles = InputWorkbooks.listSorted(inputDir);
-        if (config.sourceArtifactId().isPresent() && xlsFiles.size() != 1) {
-            throw new IllegalArgumentException(
-                    "When " + ConfigParser.SOURCE_ARTIFACT_ID_FLAG + " is set, input directory must contain exactly one .xls file; "
-                            + "found " + xlsFiles.size());
-        }
         if (xlsFiles.isEmpty()) {
             log.warn("No .xls files found in input directory: {}", inputDir.toAbsolutePath());
         }

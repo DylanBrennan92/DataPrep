@@ -6,15 +6,15 @@ import lombok.extern.slf4j.Slf4j;
 public class CliParser {
 
     private static final String USAGE = """
-            Usage: java -jar DataPrep.jar [--source-artifact-id <uuid>] [columnThreshold]
+            Usage: java -jar DataPrep.jar [columnThreshold]
             Processes all .xls files in src/main/resources/local-data/input/
-            and writes to src/main/resources/local-data/output/ (same filenames).
-            --source-artifact-id: Optional, at most once. When set, input must contain exactly one .xls file; the original is copied to
-            src/main/resources/local-data/artifacts/<uuid>.<original extension> before processing.
+            and writes cleaned workbooks to src/main/resources/local-data/output/ (same filenames).
+            For each input file, generates a new sourceArtifactId (UUID), copies the original ministry workbook to
+            src/main/resources/local-data/artifacts/<uuid>.<original extension>, then processes.
+            Writes src/main/resources/local-data/output/<name>.xls.source-artifact-id (one line: the UUID) for downstream tools.
             columnThreshold: Optional, 0.0–1.0 (default 0.01). Min fill ratio to keep a column.
-            Example: java -jar target/DataPrep.jar 0.01
-            Example: java -jar target/DataPrep.jar --source-artifact-id 550e8400-e29b-41d4-a716-446655440000
-            Example: java -jar target/DataPrep.jar --source-artifact-id 550e8400-e29b-41d4-a716-446655440000 0.01
+            Example: java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar
+            Example: java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar 0.05
             """;
 
     /**
