@@ -25,16 +25,17 @@ sequenceDiagram
     participant HeaderResolver
     participant WorkBookWriter
 
-    User->>Main: java -jar dataprep.jar 0.01
+    User->>Main: java -jar dataprep.jar [columnThreshold]
 
     Main->>CliParser: parseOrExit(args)
-    CliParser-->>Main: Config(inputDir, outputDir, columnThreshold)
+    CliParser-->>Main: Config(inputDir, outputDir, artifactsDir, columnThreshold)
 
-    Main->>DataPrepOrchestrator: run(config)
+    Main->>DataPrepOrchestrator: execute(config)
 
     Note over DataPrepOrchestrator: Loads permittedHeaders.csv (JP→EN mapping)<br/>Loads autoList.csv (brand name list)
 
     loop For each .xls in input dir
+        Note over DataPrepOrchestrator: UUID.randomUUID() → copy original to artifacts/{uuid}.xls<br/>After write: output/{name}.xls.source-artifact-id
         DataPrepOrchestrator->>WorkBookReader: read(inputFile)
 
     loop For each worksheet in workbook

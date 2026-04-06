@@ -2,7 +2,7 @@
 
 A lightweight Java CLI tool that pre-processes XLS files produced by Japan's Ministry of Land, Infrastructure, Transport and Tourism (MLIT) fuel economy database. It normalises messy multi-row headers, removes sparse columns, and writes a clean single-header-row XLS ready to be consumed by the [spec-extractor](https://github.com/DylanBrennan92/spec-extractor) application.
 
-Optionally, you can mint a stable **`sourceArtifactId`** (UUID) for a run: DataPrep copies the **original** ministry workbook to `local-data/artifacts/{uuid}.{extension}` before processing, so downstream JSON can point back to the byte-identical source file. Pass the **same UUID** to spec-extractor’s `--source-artifact-id` when extracting from that run’s cleaned `.xls`.
+For **every** input workbook, DataPrep generates a new **`sourceArtifactId`** (UUID v4), copies the **original** ministry bytes to `local-data/artifacts/{uuid}.{extension}` **before** cleaning, then writes the cleaned `.xls` beside a **lineage sidecar**: `local-data/output/{same-name}.xls.source-artifact-id` (one line: that UUID). Use that UUID when you run [spec-extractor](https://github.com/DylanBrennan92/spec-extractor) with `--source-artifact-id` so JSON rows get matching `sourceArtifactId` (spec-extractor is documented separately).
 
 ## How It Works
 
@@ -11,7 +11,7 @@ The pipeline runs in four stages:
 1. **Read** — `WorkBookReader` opens the XLS workbook, detects the multi-row header range per sheet (anchored to `車名`), and reads all data rows into memory.
 2. **Process** — `WorkBookProcessor` drops columns below the fill threshold, resolves the multi-row headers into a single English label using `permittedHeaders.csv`, and removes or deduplicates any remaining duplicate columns using fill-rate comparison.
 3. **Write** — `WorkBookWriter` writes the cleaned workbook (one header row + data rows per sheet) to the output path.
-4. **Orchestrate** — `DataPrepOrchestrator` wires reader, processor, and writer; when `--source-artifact-id` is set it also **copies** the single input `.xls` into `local-data/artifacts/` first. `Main` parses CLI args via `CliParser` (`ConfigParser` + `ConfigValidator`) and runs the orchestrator.
+4. **Orchestrate** — `DataPrepOrchestrator` wires reader, processor, and writer. Per input file it generates a UUID, archives the original under `local-data/artifacts/`, runs read → process → write, then writes the `.source-artifact-id` sidecar next to the cleaned file. `Main` parses CLI via `CliParser` (`ConfigParser` + `ConfigValidator`) and runs the orchestrator.
 
 ### Pipeline Sequence Diagram
 
@@ -29,13 +29,13 @@ sequenceDiagram
     participant HeaderResolver
     participant WorkBookWriter
 
-    User->>Main: java -jar dataprep.jar [--source-artifact-id UUID] [columnThreshold]
+    User->>Main: java -jar dataprep.jar [columnThreshold]
     Main->>CliParser: parseOrExit(args)
     CliParser-->>Main: Config(...)
     Main->>DataPrepOrchestrator: execute(config)
     Note over DataPrepOrchestrator: Loads permittedHeaders.csv (JP→EN mapping)<br/>Loads autoList.csv (brand name list)
     loop For each .xls in input dir
-        Note over DataPrepOrchestrator: If sourceArtifactId set:<br/>copy original → local-data/artifacts/{uuid}.xls
+        Note over DataPrepOrchestrator: New UUID → copy original → artifacts/{uuid}.xls<br/>then write output + {name}.xls.source-artifact-id
         DataPrepOrchestrator->>WorkBookReader: read(inputFile)
         loop For each worksheet in workbook
             WorkBookReader->>HeaderRangeDetector: detect(sheet, brandNames)
@@ -82,7 +82,7 @@ DataPrep/
     ├── local-data/
     │   ├── input/                 # Place .xls input files here
     │   ├── output/                # Processed output files (same filenames)
-    │   ├── artifacts/             # Original XLS copy when --source-artifact-id is set ({uuid}.xls)
+    │   ├── artifacts/             # One original copy per workbook: {uuid}.{extension}
     │   └── permittedHeaders.csv   # Japanese → English header mapping
     └── logback.xml
 ```
@@ -114,26 +114,28 @@ The runnable fat-JAR is produced at `target/dataprep-1.0-SNAPSHOT-jar-with-depen
 
 ## Running
 
-**Run from the DataPrep project root.** The application processes all `.xls` files in `src/main/resources/local-data/input/` and writes them to `src/main/resources/local-data/output/` (same filenames). If you pass `--source-artifact-id`, there must be **exactly one** `.xls` in `input/`; the tool copies that file to `local-data/artifacts/` before cleaning.
+**Run from the DataPrep project root.** The application processes all `.xls` files in `src/main/resources/local-data/input/` and writes cleaned workbooks to `src/main/resources/local-data/output/` (same base filenames). For each file it **always** archives the untouched original under `artifacts/` with a **new** UUID and records that id in a sidecar file next to the cleaned `.xls`.
 
 ```bash
-java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar [--source-artifact-id <uuid>] [columnThreshold]
+java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar [columnThreshold]
 ```
+
+CLI flags such as `--source-artifact-id` are **not** supported; ids are generated inside the app.
 
 ### Arguments
 
 | Argument | Description |
 |---|---|
-| `--source-artifact-id <uuid>` | Optional, at most once. When set, `local-data/input/` must contain **exactly one** `.xls`. The original workbook is copied to `local-data/artifacts/<uuid>.<extension>` before processing. Use the same UUID with [spec-extractor](https://github.com/DylanBrennan92/spec-extractor)’s `--source-artifact-id` so JSON output includes `sourceArtifactId` for traceability. |
 | `columnThreshold` | Optional. Minimum data fill ratio `0.0–1.0` to keep a column. Default: `0.01` |
 
 ### Input/Output
 
 | Location | Purpose |
 |---|---|
-| `src/main/resources/local-data/input/` | Place your `.xls` source files here |
-| `src/main/resources/local-data/output/` | Processed files are written here (same filenames as input) |
-| `src/main/resources/local-data/artifacts/` | Original byte copy when `--source-artifact-id` is set — `{uuid}.xls` (or original extension) |
+| `src/main/resources/local-data/input/` | Place your `.xls` source files here (any count; each gets its own UUID and artifact copy) |
+| `src/main/resources/local-data/output/` | Cleaned `.xls` files (same filenames as input) |
+| `src/main/resources/local-data/output/*.xls.source-artifact-id` | One UTF-8 text file per output workbook: a single line containing the UUID for that file |
+| `src/main/resources/local-data/artifacts/` | Original byte copy of each input — `{uuid}.{extension}` (extension matches the source file) |
 
 ### Column Threshold Guide
 
@@ -153,13 +155,9 @@ java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar
 
 # Process all files with 5% fill threshold
 java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar 0.05
-
-# Single workbook + lineage (exactly one .xls in input/)
-java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar --source-artifact-id 550e8400-e29b-41d4-a716-446655440000
-
-# Same, with explicit column threshold
-java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar --source-artifact-id 550e8400-e29b-41d4-a716-446655440000 0.01
 ```
+
+After a run, read the UUID for a given cleaned file from `local-data/output/<filename>.xls.source-artifact-id` or from the INFO logs (`sourceArtifactId: ...`).
 
 ### Debug Logging
 
