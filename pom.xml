@@ -17,7 +17,7 @@
         <jackson.version>2.21.2</jackson.version>
         <sl4j.version>2.0.17</sl4j.version>
         <logback.version>1.5.32</logback.version>
-        <lombok.version>1.18.44</lombok.version>
+        <lombok.version>1.18.46</lombok.version>
         <sl4j-logging.verson>2.25.4</sl4j-logging.verson>
     </properties>
 
@@ -38,7 +38,7 @@
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-junit-jupiter</artifactId>
-            <version>5.14.2</version>
+            <version>5.23.0</version>
             <scope>test</scope>
         </dependency>
         <dependency>
