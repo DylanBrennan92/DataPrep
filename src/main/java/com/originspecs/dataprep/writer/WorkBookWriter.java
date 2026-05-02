@@ -18,6 +18,9 @@ import java.util.List;
 @Slf4j
 public class WorkBookWriter {
 
+    /** Hard row limit for the legacy HSSF (.xls) format. */
+    static final int XLS_MAX_ROWS = 65_536;
+
     /**
      * Writes a WorkBookData model to a new .xls file, preserving the sheet structure.
      * Headers are written as the first row of each sheet.
@@ -45,6 +48,13 @@ public class WorkBookWriter {
 
     private void writeSheet(Sheet sheet, WorkSheetData sheetData) {
         int rowIndex = 0;
+
+        // 1 header row + N data rows — warn early so truncation is never silent
+        int totalRows = (sheetData.getHeaders().isEmpty() ? 0 : 1) + sheetData.getRows().size();
+        if (totalRows > XLS_MAX_ROWS) {
+            log.warn("Sheet '{}': {} rows exceeds XLS limit of {} — output will be truncated at row {}",
+                    sheetData.getName(), totalRows, XLS_MAX_ROWS, XLS_MAX_ROWS);
+        }
 
         if (!sheetData.getHeaders().isEmpty()) {
             writeRow(sheet.createRow(rowIndex++), sheetData.getHeaders());

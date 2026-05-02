@@ -3,11 +3,9 @@ package com.originspecs.dataprep.reader;
 import com.originspecs.dataprep.config.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.ss.util.CellRangeAddress;
 
 import java.text.Normalizer;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -132,7 +130,7 @@ public class HeaderRangeDetector {
      */
     private List<Integer> findColumnsWithCarName(Sheet sheet, int carNameRowIndex) {
         Set<Integer> colSet = new LinkedHashSet<>();
-        Map<String, String> mergedValues = buildMergedCellValueMap(sheet);
+        Map<String, String> mergedValues = MergedCellValues.build(sheet, formatter);
         Row row = sheet.getRow(carNameRowIndex);
         if (row == null) return List.of();
 
@@ -153,27 +151,6 @@ public class HeaderRangeDetector {
         }
         Cell cell = row.getCell(colIndex, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
         return cell == null ? "" : formatter.formatCellValue(cell).strip();
-    }
-
-    private Map<String, String> buildMergedCellValueMap(Sheet sheet) {
-        Map<String, String> mergedValues = new HashMap<>();
-        for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
-            CellRangeAddress region = sheet.getMergedRegion(i);
-            Row firstRow = sheet.getRow(region.getFirstRow());
-            if (firstRow == null) continue;
-
-            Cell originCell = firstRow.getCell(region.getFirstColumn(), Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
-            String value = originCell == null ? "" : formatter.formatCellValue(originCell).strip();
-            if (value.isEmpty()) continue;
-
-            for (int r = region.getFirstRow(); r <= region.getLastRow(); r++) {
-                for (int c = region.getFirstColumn(); c <= region.getLastColumn(); c++) {
-                    if (r == region.getFirstRow() && c == region.getFirstColumn()) continue;
-                    mergedValues.put(r + ":" + c, value);
-                }
-            }
-        }
-        return mergedValues;
     }
 
     private record EndAndColumn(int endRowIndex, int carNameColumnIndex) {}

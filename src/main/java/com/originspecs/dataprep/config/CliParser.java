@@ -7,15 +7,20 @@ public class CliParser {
 
     private static final String USAGE = """
             Usage: java -jar DataPrep.jar [columnThreshold]
-            Processes all .xls files in src/main/resources/local-data/input/
-            and writes cleaned workbooks to src/main/resources/local-data/output/ (same filenames).
+            Processes all .xls files in %s
+            and writes cleaned workbooks to %s (same filenames).
             For each input file, generates a new sourceArtifactId (UUID), copies the original ministry workbook to
-            src/main/resources/local-data/artifacts/<uuid>.<original extension>, then processes.
-            Writes src/main/resources/local-data/output/<name>.xls.source-artifact-id (one line: the UUID) for downstream tools.
+            %s/<uuid>.<original extension>, then processes.
+            Writes %s/<name>.xls.source-artifact-id (one line: the UUID) for downstream tools.
             columnThreshold: Optional, 0.0–1.0 (default 0.01). Min fill ratio to keep a column.
             Example: java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar
             Example: java -jar target/dataprep-1.0-SNAPSHOT-jar-with-dependencies.jar 0.05
-            """;
+            """.formatted(
+            Constants.DEFAULT_INPUT_DIR,
+            Constants.DEFAULT_OUTPUT_DIR,
+            Constants.ARTIFACTS_DIR,
+            Constants.DEFAULT_OUTPUT_DIR
+    );
 
     /**
      * Parses CLI arguments into a validated Config, or logs error, prints usage and exits the process.

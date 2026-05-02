@@ -7,9 +7,6 @@ import java.nio.file.Path;
  */
 public final class ConfigParser {
 
-    private static final String DEFAULT_INPUT_DIR = "src/main/resources/local-data/input";
-    private static final String DEFAULT_OUTPUT_DIR = "src/main/resources/local-data/output";
-    private static final String DEFAULT_ARTIFACTS_DIR = Constants.ARTIFACTS_DIR;
     private static final double DEFAULT_COLUMN_THRESHOLD = 0.01;
 
     private ConfigParser() {}
@@ -32,9 +29,9 @@ public final class ConfigParser {
                 ? DEFAULT_COLUMN_THRESHOLD
                 : parseColumnThreshold(args[0]);
         return new Config(
-                Path.of(DEFAULT_INPUT_DIR),
-                Path.of(DEFAULT_OUTPUT_DIR),
-                Path.of(DEFAULT_ARTIFACTS_DIR),
+                Path.of(Constants.DEFAULT_INPUT_DIR),
+                Path.of(Constants.DEFAULT_OUTPUT_DIR),
+                Path.of(Constants.ARTIFACTS_DIR),
                 columnThreshold
         );
     }

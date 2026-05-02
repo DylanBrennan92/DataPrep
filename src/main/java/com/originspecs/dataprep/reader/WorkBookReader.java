@@ -6,15 +6,12 @@ import com.originspecs.dataprep.model.WorkSheetData;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.ss.util.CellRangeAddress;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.Normalizer;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -26,6 +23,7 @@ public class WorkBookReader {
     private final DataFormatter formatter = new DataFormatter();
     private final HeaderRangeDetector headerRangeDetector;
     private final Set<String> japaneseBrandNames;
+    /** NFKC-normalised copy of japaneseBrandNames for half-width/full-width katakana matching. */
     private final Set<String> normalizedBrandNames;
 
     /** Creates a reader without brand-based header detection or data-start validation. */
@@ -43,11 +41,11 @@ public class WorkBookReader {
      * @param japaneseBrandNames Set of Japanese brand names (e.g. "ホンダ", "トヨタ")
      */
     public WorkBookReader(Set<String> japaneseBrandNames) {
-        this.japaneseBrandNames = japaneseBrandNames != null ? japaneseBrandNames : Set.of();
-        this.normalizedBrandNames = this.japaneseBrandNames.stream()
+        this.japaneseBrandNames = japaneseBrandNames;
+        this.normalizedBrandNames = japaneseBrandNames.stream()
                 .map(b -> Normalizer.normalize(b, Normalizer.Form.NFKC))
                 .collect(Collectors.toSet());
-        this.headerRangeDetector = new HeaderRangeDetector(this.japaneseBrandNames);
+        this.headerRangeDetector = new HeaderRangeDetector(japaneseBrandNames);
     }
 
     /**
@@ -99,15 +97,8 @@ public class WorkBookReader {
 
         validateDataStartRow(sheet, headerRange);
 
-        // Exclude metadata columns to the left of the Car Name column (e.g. Lexus sheets)
-        int dataStartCol = Math.max(0, headerRange.carNameColumnIndex());
-        if (dataStartCol > 0) {
-            log.info("Sheet '{}': excluding {} metadata column(s) before Car Name (col {})",
-                    sheet.getSheetName(), dataStartCol, headerRange.carNameColumnIndex());
-        }
-
         // Build merged cell map once for the whole sheet so header rows resolve correctly
-        Map<String, String> mergedCellValues = buildMergedCellValueMap(sheet);
+        Map<String, String> mergedCellValues = MergedCellValues.build(sheet, formatter);
 
         List<List<String>> rawHeaderRows = new ArrayList<>();
         List<RowData> rows = new ArrayList<>();
@@ -123,15 +114,13 @@ public class WorkBookReader {
 
             if (headerRange.isHeaderRow(rowIndex)) {
                 // Collect every header range row — merged cell values are expanded here
-                List<String> fullHeaderRow = readHeaderRow(row, mergedCellValues);
-                List<String> headerRow = sliceFromColumn(fullHeaderRow, dataStartCol);
+                List<String> headerRow = readHeaderRow(row, mergedCellValues);
                 rawHeaderRows.add(headerRow);
                 maxColumnCount = Math.max(maxColumnCount, headerRow.size());
                 continue;
             }
 
-            List<String> fullRow = readRow(row, evaluator, mergedCellValues);
-            rows.add(new RowData(sliceFromColumn(fullRow, dataStartCol)));
+            rows.add(new RowData(readRow(row, evaluator)));
         }
 
         worksheetData.setRawHeaderRows(rawHeaderRows);
@@ -167,23 +156,15 @@ public class WorkBookReader {
     }
 
     /**
-     * Reads a data row, evaluating formula cells to their computed value and
-     * propagating merged-region values to non-origin cells. This ensures that
-     * group-identifier columns (e.g. Car Name, Common Name) which use vertical
-     * merges in the source file are filled for every row in the merged region,
-     * not just the top cell.
+     * Reads a plain data row, evaluating any formula cells to their computed value.
+     * Falls back to an empty string if evaluation fails for a particular cell.
      */
-    private List<String> readRow(Row row, FormulaEvaluator evaluator, Map<String, String> mergedCellValues) {
+    private List<String> readRow(Row row, FormulaEvaluator evaluator) {
         int lastCellNum = row.getLastCellNum();
         List<String> cellValues = new ArrayList<>(Math.max(lastCellNum, 0));
         for (int i = 0; i < lastCellNum; i++) {
             Cell cell = row.getCell(i, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
-            if (cell == null || formatter.formatCellValue(cell, evaluator).strip().isEmpty()) {
-                String cellKey = row.getRowNum() + ":" + i;
-                cellValues.add(mergedCellValues.getOrDefault(cellKey, ""));
-            } else {
-                cellValues.add(evaluateCell(cell, evaluator));
-            }
+            cellValues.add(cell == null ? "" : evaluateCell(cell, evaluator));
         }
         return cellValues;
     }
@@ -204,16 +185,7 @@ public class WorkBookReader {
     }
 
     /**
-     * Returns a sublist from the given column index onward. Used to exclude metadata
-     * columns to the left of the Car Name column.
-     */
-    private static List<String> sliceFromColumn(List<String> values, int fromIndex) {
-        if (fromIndex <= 0 || fromIndex >= values.size()) return values;
-        return new ArrayList<>(values.subList(fromIndex, values.size()));
-    }
-
-    /**
-     * Checks if the first data row has a known Japanese car brand name in the Car Name column.
+     * Checks if the first data row starts with a known Japanese car brand name.
      * Logs a warning if no brand match is found, which may indicate that header
      * detection did not land on the correct row.
      */
@@ -227,54 +199,18 @@ public class WorkBookReader {
             return;
         }
 
-        int carNameColIndex = headerRange.carNameColumnIndex();
-        Cell carNameCell = firstDataRow.getCell(carNameColIndex, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
-        String cellValue = carNameCell == null ? "" : formatter.formatCellValue(carNameCell).strip();
+        Cell firstCell = firstDataRow.getCell(headerRange.carNameColumnIndex(), Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
+        String firstValue = firstCell == null ? "" : formatter.formatCellValue(firstCell).strip();
+        String normalizedValue = Normalizer.normalize(firstValue, Normalizer.Form.NFKC);
 
-        String normalized = Normalizer.normalize(cellValue, Normalizer.Form.NFKC);
-        if (normalizedBrandNames.contains(normalized)) {
-            log.debug("Sheet '{}': data start confirmed — first row has brand '{}' in Car Name column (col {})",
-                    sheet.getSheetName(), cellValue, carNameColIndex);
+        if (normalizedBrandNames.contains(normalizedValue)) {
+            log.debug("Sheet '{}': data start confirmed — first row starts with brand '{}'",
+                    sheet.getSheetName(), firstValue);
         } else {
-            log.warn("Sheet '{}': first data row at index {} has '{}' in Car Name column (col {}) — not a known brand; " +
-                    "header detection may be incorrect", sheet.getSheetName(), dataStartRow, cellValue, carNameColIndex);
+            log.warn("Sheet '{}': first data row at index {} col {} starts with '{}' which is not a known brand — " +
+                    "header detection may be incorrect",
+                    sheet.getSheetName(), dataStartRow, headerRange.carNameColumnIndex(), firstValue);
         }
     }
 
-    /**
-     * Builds a map of (rowIndex:colIndex) → value for every non-origin cell
-     * in each merged region. The origin (top-left) cell already holds the value
-     * in POI; this map covers all other cells in the region so they can be looked
-     * up during header row reading when the cell is blank.
-     *
-     * <p>Both horizontal and vertical expansion are intentional: group headers in
-     * the source XLS often span multiple rows (vertical) AND multiple columns
-     * (horizontal), and every cell in the merge needs the value available as a
-     * fallback. Duplicate-label resolution is handled downstream in
-     * {@link com.originspecs.dataprep.processor.WorkBookProcessor} using data
-     * fill-rate comparison, not by restricting expansion here.
-     */
-    private Map<String, String> buildMergedCellValueMap(Sheet sheet) {
-        Map<String, String> mergedValues = new HashMap<>();
-
-        for (CellRangeAddress region : sheet.getMergedRegions()) {
-            Row firstRow = sheet.getRow(region.getFirstRow());
-            if (firstRow == null) continue;
-
-            Cell originCell = firstRow.getCell(region.getFirstColumn(), Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
-            String value = originCell == null ? "" : formatter.formatCellValue(originCell).strip();
-
-            if (value.isEmpty()) continue;
-
-            for (int r = region.getFirstRow(); r <= region.getLastRow(); r++) {
-                for (int c = region.getFirstColumn(); c <= region.getLastColumn(); c++) {
-                    if (r == region.getFirstRow() && c == region.getFirstColumn()) continue;
-                    mergedValues.put(r + ":" + c, value);
-                }
-            }
-        }
-
-        log.debug("Sheet '{}': resolved {} merged cell positions", sheet.getSheetName(), mergedValues.size());
-        return mergedValues;
-    }
 }
