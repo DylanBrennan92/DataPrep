@@ -10,10 +10,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class WorkBookReader {
@@ -21,6 +23,8 @@ public class WorkBookReader {
     private final DataFormatter formatter = new DataFormatter();
     private final HeaderRangeDetector headerRangeDetector;
     private final Set<String> japaneseBrandNames;
+    /** NFKC-normalised copy of japaneseBrandNames for half-width/full-width katakana matching. */
+    private final Set<String> normalizedBrandNames;
 
     /** Creates a reader without brand-based header detection or data-start validation. */
     public WorkBookReader() {
@@ -38,6 +42,9 @@ public class WorkBookReader {
      */
     public WorkBookReader(Set<String> japaneseBrandNames) {
         this.japaneseBrandNames = japaneseBrandNames;
+        this.normalizedBrandNames = japaneseBrandNames.stream()
+                .map(b -> Normalizer.normalize(b, Normalizer.Form.NFKC))
+                .collect(Collectors.toSet());
         this.headerRangeDetector = new HeaderRangeDetector(japaneseBrandNames);
     }
 
@@ -192,15 +199,17 @@ public class WorkBookReader {
             return;
         }
 
-        Cell firstCell = firstDataRow.getCell(0, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
+        Cell firstCell = firstDataRow.getCell(headerRange.carNameColumnIndex(), Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
         String firstValue = firstCell == null ? "" : formatter.formatCellValue(firstCell).strip();
+        String normalizedValue = Normalizer.normalize(firstValue, Normalizer.Form.NFKC);
 
-        if (japaneseBrandNames.contains(firstValue)) {
+        if (normalizedBrandNames.contains(normalizedValue)) {
             log.debug("Sheet '{}': data start confirmed — first row starts with brand '{}'",
                     sheet.getSheetName(), firstValue);
         } else {
-            log.warn("Sheet '{}': first data row at index {} starts with '{}' which is not a known brand — " +
-                    "header detection may be incorrect", sheet.getSheetName(), dataStartRow, firstValue);
+            log.warn("Sheet '{}': first data row at index {} col {} starts with '{}' which is not a known brand — " +
+                    "header detection may be incorrect",
+                    sheet.getSheetName(), dataStartRow, headerRange.carNameColumnIndex(), firstValue);
         }
     }
 
