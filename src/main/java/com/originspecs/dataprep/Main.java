@@ -16,6 +16,7 @@ public class Main {
             orchestrator.execute(config);
         } catch (Exception e) {
             log.error("Data preparation failed", e);
+            System.exit(1);
         }
     }
 }
