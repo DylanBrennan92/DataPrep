@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Dependency Review
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           # Fail the check if any dependency with a CVSS score >= 7 (High/Critical) is introduced
           fail-on-severity: high
