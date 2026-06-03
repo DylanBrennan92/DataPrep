@@ -1,9 +1,10 @@
 package com.originspecs.dataprep.config;
 
-import lombok.extern.slf4j.Slf4j;
-
-@Slf4j
-public class CliParser {
+/**
+ * Parses and validates CLI arguments into a {@link Config}.
+ * Process exit on failure is handled by {@link com.originspecs.dataprep.Main}.
+ */
+public final class CliParser {
 
     private static final String USAGE = """
             Usage: java -jar DataPrep.jar [columnThreshold]
@@ -22,20 +23,21 @@ public class CliParser {
             Constants.DEFAULT_OUTPUT_DIR
     );
 
-    /**
-     * Parses CLI arguments into a validated Config, or logs error, prints usage and exits the process.
-     */
-    public static Config parseOrExit(String[] args) {
+    private CliParser() {}
 
-        try {
-            Config config = ConfigParser.parse(args);
-            ConfigValidator.validate(config);
-            return config;
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            log.error("Invalid arguments or environment: {}", e.getMessage());
-            log.error(USAGE);
-            System.exit(1);
-            throw new AssertionError("unreachable: process should have exited", e);
-        }
+    /**
+     * Parses CLI arguments and validates config against the filesystem.
+     *
+     * @throws IllegalArgumentException invalid arguments
+     * @throws IllegalStateException    environment validation failure
+     */
+    public static Config parse(String[] args) {
+        Config config = ConfigParser.parse(args);
+        ConfigValidator.validate(config);
+        return config;
+    }
+
+    public static String usage() {
+        return USAGE;
     }
 }
