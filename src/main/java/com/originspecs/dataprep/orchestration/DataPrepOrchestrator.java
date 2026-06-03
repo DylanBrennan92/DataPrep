@@ -1,11 +1,8 @@
 package com.originspecs.dataprep.orchestration;
 
 import com.originspecs.dataprep.artifact.SourceArtifactPaths;
-import com.originspecs.dataprep.config.CarListBuilder;
 import com.originspecs.dataprep.config.Config;
-import com.originspecs.dataprep.config.PermittedHeadersBuilder;
 import com.originspecs.dataprep.input.InputWorkbooks;
-import com.originspecs.dataprep.model.CarBrand;
 import com.originspecs.dataprep.model.WorkBookData;
 import com.originspecs.dataprep.processor.WorkBookProcessor;
 import com.originspecs.dataprep.reader.WorkBookReader;
@@ -18,20 +15,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 /**
  * Orchestrates the complete data preparation pipeline: read → process → write.
- * Loads permitted headers and car brand lists on startup and wires all components.
- * Contains no business logic.
+ * Contains no business logic and does not load configuration — use {@link com.originspecs.dataprep.application.DataPrepComposition}.
  */
 @Slf4j
-public class DataPrepOrchestrator {
+public final class DataPrepOrchestrator {
 
     private final WorkBookReader reader;
     private final WorkBookProcessor processor;
@@ -39,24 +32,7 @@ public class DataPrepOrchestrator {
     private final Supplier<UUID> newSourceArtifactId;
 
     /**
-     * Default constructor: loads permitted headers and car brands from their
-     * respective CSV files and wires all components.
-     */
-    public DataPrepOrchestrator() {
-        Map<String, String> permittedHeaders = PermittedHeadersBuilder.load();
-        List<CarBrand> carBrands = CarListBuilder.populateBrandList("autoList.csv");
-        Set<String> japaneseBrandNames = carBrands.stream()
-                .map(CarBrand::japanese)
-                .collect(Collectors.toSet());
-
-        this.reader = new WorkBookReader(japaneseBrandNames);
-        this.processor = new WorkBookProcessor(permittedHeaders, japaneseBrandNames);
-        this.writer = new WorkBookWriter();
-        this.newSourceArtifactId = UUID::randomUUID;
-    }
-
-    /**
-     * Constructor for tests — inject components; each workbook gets a random {@link UUID} from {@link UUID#randomUUID()}.
+     * Wires the pipeline; each workbook gets a random {@link UUID} from {@link UUID#randomUUID()}.
      */
     public DataPrepOrchestrator(WorkBookReader reader, WorkBookProcessor processor, WorkBookWriter writer) {
         this(reader, processor, writer, UUID::randomUUID);
@@ -70,9 +46,9 @@ public class DataPrepOrchestrator {
             WorkBookProcessor processor,
             WorkBookWriter writer,
             Supplier<UUID> newSourceArtifactId) {
-        this.reader = reader;
-        this.processor = processor;
-        this.writer = writer;
+        this.reader = Objects.requireNonNull(reader, "reader");
+        this.processor = Objects.requireNonNull(processor, "processor");
+        this.writer = Objects.requireNonNull(writer, "writer");
         this.newSourceArtifactId = Objects.requireNonNull(newSourceArtifactId, "newSourceArtifactId");
     }
 

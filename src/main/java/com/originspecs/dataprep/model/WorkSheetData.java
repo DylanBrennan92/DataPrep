@@ -11,11 +11,11 @@ public class WorkSheetData {
     private int index;
 
     // All rows within the detected header range, stored in order (top → bottom).
-    // Used by WorkBookProcessor to resolve a single header label per column.
+    // Used by DefaultWorkBookProcessor to resolve a single header label per column.
     // Empty after processing — only the resolved headers field is carried forward.
     private List<List<String>> rawHeaderRows = new ArrayList<>();
 
-    // Resolved single-row headers: one label per column, set by WorkBookProcessor
+    // Resolved single-row headers: one label per column, set by DefaultWorkBookProcessor
     // after column filtering and header resolution.
     private List<String> headers = new ArrayList<>();
 

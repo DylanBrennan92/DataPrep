@@ -15,7 +15,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Unit tests for {@link WorkBookProcessor}.
+ * Unit tests for {@link DefaultWorkBookProcessor}.
  *
  * <p>All tests exercise the public {@code process()} pipeline through carefully
  * constructed {@link WorkSheetData} objects, so private implementation details
@@ -53,11 +53,11 @@ class WorkBookProcessorTest {
         PERMITTED = m;
     }
 
-    private WorkBookProcessor processor;
+    private DefaultWorkBookProcessor processor;
 
     @BeforeEach
     void setUp() {
-        processor = new WorkBookProcessor(PERMITTED);
+        processor = new DefaultWorkBookProcessor(PERMITTED);
     }
 
     // -----------------------------------------------------------------------
